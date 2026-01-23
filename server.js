@@ -383,6 +383,20 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+const PORT = process.env.PORT || 3002;
+
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Servidor rodando na porta ${PORT}`);
 });
+
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://192.185.176.170:${PORT}`);
+});
+
+const cors = require("cors");
+
+app.use(cors({
+  origin: "*"
+}));
+
