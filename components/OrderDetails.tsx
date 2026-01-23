@@ -1,0 +1,160 @@
+import React, { useState } from 'react';
+import { Order } from '../types';
+import { MapPin, Calendar, CreditCard, DollarSign, Camera, X } from 'lucide-react';
+
+interface OrderDetailsProps {
+  order: Order;
+}
+
+export const OrderDetails: React.FC<OrderDetailsProps> = ({ order }) => {
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const remainingBalance = order.total - (order.downPayment || 0);
+
+  return (
+    <div className="space-y-6">
+      {/* Info Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Address */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-start gap-4">
+            <div className="bg-blue-50 p-3 rounded-lg text-primary">
+                <MapPin size={24} />
+            </div>
+            <div>
+                <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Entrega</h4>
+                <p className="text-gray-800 font-medium">{order.customerName}</p>
+                <p className="text-gray-600 text-sm mt-1">{order.shippingAddress}</p>
+                {order.customerPhone && (
+                   <p className="text-gray-400 text-xs mt-1">{order.customerPhone}</p>
+                )}
+            </div>
+        </div>
+
+        {/* Dates */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-start gap-4">
+            <div className="bg-purple-50 p-3 rounded-lg text-purple-600">
+                <Calendar size={24} />
+            </div>
+            <div>
+                <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Datas</h4>
+                <div className="flex flex-col gap-1">
+                    <p className="text-gray-600 text-sm">Pedido: <span className="text-gray-800 font-medium">{order.orderDate}</span></p>
+                    <p className="text-gray-600 text-sm">Entrega: <span className="text-gray-800 font-medium">{order.estimatedDelivery}</span></p>
+                </div>
+            </div>
+        </div>
+      </div>
+
+      {/* Photos Section */}
+      {order.photos && order.photos.length > 0 && (
+          <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+             <div className="flex items-center gap-3 mb-4">
+                 <div className="bg-orange-50 p-2 rounded-lg text-orange-600">
+                     <Camera size={20} />
+                 </div>
+                 <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Fotos do Pedido</h4>
+             </div>
+             <div className="grid grid-cols-3 gap-3">
+                 {order.photos.map((photo, idx) => (
+                     <div 
+                        key={idx} 
+                        className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 cursor-pointer hover:opacity-90 transition"
+                        onClick={() => setExpandedImage(photo)}
+                     >
+                         <img src={photo} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                     </div>
+                 ))}
+             </div>
+          </div>
+      )}
+
+      {/* Financial Summary */}
+      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+         <div className="flex items-center gap-3 mb-4">
+             <div className="bg-green-50 p-2 rounded-lg text-green-600">
+                 <CreditCard size={20} />
+             </div>
+             <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Informações de Pagamento</h4>
+         </div>
+         
+         <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+             <div className="flex justify-between">
+                 <span className="text-gray-600">Forma de Pagamento</span>
+                 <span className="text-gray-900 font-medium">{order.paymentMethod || 'Não informada'}</span>
+             </div>
+             <div className="border-t border-gray-200 my-2"></div>
+             <div className="flex justify-between">
+                 <span className="text-gray-600">Valor Total do Pedido</span>
+                 <span className="text-gray-900 font-bold">
+                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total)}
+                 </span>
+             </div>
+             <div className="flex justify-between text-green-600">
+                 <span>Entrada / Pago</span>
+                 <span className="font-medium">
+                     - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.downPayment || 0)}
+                 </span>
+             </div>
+             <div className="flex justify-between text-lg pt-2 border-t border-gray-200">
+                 <span className="text-gray-900 font-bold">Saldo Restante</span>
+                 <span className={`${remainingBalance > 0 ? 'text-red-600' : 'text-green-600'} font-bold`}>
+                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(remainingBalance)}
+                 </span>
+             </div>
+         </div>
+      </div>
+
+      {/* Items Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-6 border-b border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-800">Itens do Pedido</h3>
+        </div>
+        <div className="divide-y divide-gray-100">
+            {order.items.map((item) => (
+                <div key={item.id} className="p-6 flex items-center gap-4 hover:bg-gray-50 transition-colors">
+                    <img
+                        src={item.image}
+                        alt={item.name}
+                        className="w-16 h-16 rounded-lg object-cover border border-gray-200"
+                    />
+                    <div className="flex-1">
+                        <h4 className="text-gray-900 font-medium">{item.name}</h4>
+                        {item.size && (
+                             <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded">
+                                Tamanho: {item.size}
+                             </span>
+                        )}
+                        <p className="text-gray-500 text-sm mt-1">Qtd: {item.quantity}</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-gray-900 font-semibold">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price)}
+                        </p>
+                    </div>
+                </div>
+            ))}
+        </div>
+      </div>
+
+      {/* Lightbox Modal */}
+      {expandedImage && (
+        <div 
+            className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in duration-200"
+            onClick={() => setExpandedImage(null)}
+        >
+            <button 
+                className="absolute top-4 right-4 text-white hover:text-gray-300"
+                onClick={() => setExpandedImage(null)}
+            >
+                <X size={32} />
+            </button>
+            <img 
+                src={expandedImage} 
+                alt="Ampliada" 
+                className="max-w-full max-h-[90vh] object-contain rounded-md"
+                onClick={(e) => e.stopPropagation()} // Prevent closing when clicking image
+            />
+        </div>
+      )}
+    </div>
+  );
+};
