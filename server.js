@@ -3,33 +3,43 @@ import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import 'dotenv/config'; // Loads .env file if it exists
+import path from 'path';
+import { fileURLToPath } from 'url';
+import 'dotenv/config'; 
+
+// Configuração para ES Modules (para usar __dirname)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-// Alterado para 3002 para evitar conflito com Vite (que geralmente usa 3000 ou 3001)
 const PORT = process.env.PORT || 3002;
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 
-// Database configuration using Environment Variables (Production) or default (Local)
+// Servir arquivos estáticos do React (Build)
+// O Railway roda 'npm run build', que cria a pasta 'dist'
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// Database configuration
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'pedidos',
-  multipleStatements: true
+  multipleStatements: true,
+  // HostGator as vezes exige ssl: { rejectUnauthorized: false }
+  ssl: process.env.DB_USE_SSL === 'true' ? { rejectUnauthorized: false } : undefined
 };
 
 let pool;
 
 async function initDB() {
   try {
-    // In production (HostGator), the DB is usually created via cPanel.
-    // We try to connect directly.
     pool = mysql.createPool(dbConfig);
 
-    // 3. Create Tables (Sync Schema)
+    // Na HostGator, as tabelas geralmente já são criadas, mas mantemos isso
+    // para garantir a integridade se o banco estiver vazio.
     const createTablesQuery = `
       CREATE TABLE IF NOT EXISTS employees (
         id VARCHAR(50) PRIMARY KEY,
@@ -89,7 +99,7 @@ async function initDB() {
 
     await pool.query(createTablesQuery);
 
-    // 4. Seed Admin User & FORCE Password Reset
+    // Seed Admin
     const [rows] = await pool.query('SELECT * FROM employees WHERE login = "admin"');
     if (rows.length === 0) {
       await pool.query(`
@@ -98,12 +108,11 @@ async function initDB() {
       `);
       console.log('Admin user created (admin/123)');
     } else {
-      // CORREÇÃO: Garante que a senha seja '123' mesmo se o usuário já existir com outra senha antiga
-      await pool.query('UPDATE employees SET password = "123" WHERE login = "admin"');
-      console.log('Senha do Admin resetada para "123" para garantir acesso.');
+       // Reset senha admin se necessário
+       // await pool.query('UPDATE employees SET password = "123" WHERE login = "admin"');
     }
 
-    console.log('Database and Tables synced successfully');
+    console.log('Database synced successfully');
   } catch (error) {
     console.error('Error initializing database:', error);
   }
@@ -111,22 +120,15 @@ async function initDB() {
 
 initDB();
 
-// --- Routes ---
+// --- API Routes (Prefix /api) ---
 
-app.get('/', (req, res) => {
-    res.send(`
-        <div style="font-family: sans-serif; text-align: center; padding: 50px;">
-            <h1>API Rastreaê Online! 🚀</h1>
-            <p>Backend rodando na porta ${PORT}.</p>
-        </div>
-    `);
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', port: PORT });
 });
 
-// 1. Get All Orders
 app.get('/api/orders', async (req, res) => {
   try {
     const [orders] = await pool.query('SELECT * FROM orders');
-    
     const fullOrders = await Promise.all(orders.map(async (order) => {
       const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
       const [timeline] = await pool.query('SELECT * FROM order_timeline WHERE order_id = ?', [order.id]);
@@ -141,7 +143,6 @@ app.get('/api/orders', async (req, res) => {
         photos: photos.map(p => p.photo_data)
       };
     }));
-
     res.json(fullOrders);
   } catch (err) {
     console.error(err);
@@ -149,7 +150,6 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
-// 2. Get Order by ID
 app.get('/api/orders/:id', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
@@ -176,7 +176,6 @@ app.get('/api/orders/:id', async (req, res) => {
   }
 });
 
-// 3. Create Order
 app.post('/api/orders', async (req, res) => {
   if (!pool) return res.status(500).json({error: "Database not initialized"});
   const conn = await pool.getConnection();
@@ -216,7 +215,6 @@ app.post('/api/orders', async (req, res) => {
   }
 });
 
-// 4. Update Order (Full)
 app.put('/api/orders/:id', async (req, res) => {
   if (!pool) return res.status(500).json({error: "Database not initialized"});
   const conn = await pool.getConnection();
@@ -225,20 +223,17 @@ app.put('/api/orders/:id', async (req, res) => {
     const orderId = req.params.id;
     const order = req.body;
 
-    // Update main info
     await conn.query(
       `UPDATE orders SET customerName=?, customerPhone=?, orderDate=?, estimatedDelivery=?, total=?, downPayment=?, paymentMethod=?, shippingAddress=?, pressingDate=?, seamstress=? WHERE id=?`,
       [order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.seamstress, orderId]
     );
 
-    // Replace Items
     await conn.query('DELETE FROM order_items WHERE order_id = ?', [orderId]);
     if (order.items && order.items.length > 0) {
       const itemValues = order.items.map(item => [orderId, item.name, item.size, item.quantity, item.price, item.image]);
       await conn.query('INSERT INTO order_items (order_id, name, size, quantity, price, image) VALUES ?', [itemValues]);
     }
 
-    // Replace Photos
     await conn.query('DELETE FROM order_photos WHERE order_id = ?', [orderId]);
     if (order.photos && order.photos.length > 0) {
       const photoValues = order.photos.map(p => [orderId, p]);
@@ -256,7 +251,6 @@ app.put('/api/orders/:id', async (req, res) => {
   }
 });
 
-// 5. Update Status & Timeline
 app.patch('/api/orders/:id/status', async (req, res) => {
   if (!pool) return res.status(500).json({error: "Database not initialized"});
   const conn = await pool.getConnection();
@@ -267,7 +261,6 @@ app.patch('/api/orders/:id/status', async (req, res) => {
 
       await conn.query('UPDATE orders SET currentStatus = ? WHERE id = ?', [currentStatus, orderId]);
       
-      // Replace timeline
       await conn.query('DELETE FROM order_timeline WHERE order_id = ?', [orderId]);
       if (timeline && timeline.length > 0) {
           const timelineValues = timeline.map(t => [orderId, t.status, t.timestamp, t.description, t.location, t.completed]);
@@ -285,7 +278,6 @@ app.patch('/api/orders/:id/status', async (req, res) => {
   }
 });
 
-// 6. Delete Order
 app.delete('/api/orders/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM orders WHERE id = ?', [req.params.id]);
@@ -296,11 +288,9 @@ app.delete('/api/orders/:id', async (req, res) => {
     }
 });
 
-// 7. Register Payment
 app.post('/api/orders/:id/payment', async (req, res) => {
     try {
         const { amount, method } = req.body;
-        // Fetch current values
         const [rows] = await pool.query('SELECT downPayment, paymentMethod FROM orders WHERE id = ?', [req.params.id]);
         if (rows.length === 0) return res.status(404).json({ error: 'Order not found' });
 
@@ -318,8 +308,6 @@ app.post('/api/orders/:id/payment', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-// --- Employee Routes ---
 
 app.get('/api/employees', async (req, res) => {
     try {
@@ -356,25 +344,13 @@ app.delete('/api/employees/:id', async (req, res) => {
     }
 });
 
-// --- Login Route com Debug ---
 app.post('/api/login', async (req, res) => {
     try {
         const { login, password } = req.body;
-        console.log(`Tentativa de login: User=${login}, Pass=${password}`); // Log Debug
-
         const [rows] = await pool.query('SELECT * FROM employees WHERE login = ? AND password = ?', [login, password]);
         if (rows.length > 0) {
-            console.log('Login Sucesso');
             res.json(rows[0]);
         } else {
-            console.log('Login Falhou - Credenciais inválidas');
-            // Verificação de debug para saber se é senha errada
-            const [checkUser] = await pool.query('SELECT * FROM employees WHERE login = ?', [login]);
-            if(checkUser.length > 0) {
-               console.log(`Usuário encontrado, mas senha no banco é: ${checkUser[0].password}`);
-            } else {
-               console.log('Usuário não encontrado no banco.');
-            }
             res.status(401).json({ error: 'Invalid credentials' });
         }
     } catch (err) {
@@ -383,20 +359,12 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3002;
-
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+// CATCH ALL: Qualquer rota que não seja /api devolve o index.html do React
+// Isso permite que o React Router funcione
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-
 app.listen(PORT, () => {
-  console.log(`Server running on http://192.185.176.170:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
-
-const cors = require("cors");
-
-app.use(cors({
-  origin: "*"
-}));
-

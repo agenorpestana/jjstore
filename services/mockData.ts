@@ -2,17 +2,16 @@
 
 import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput } from '../types';
 
-// ATENÇÃO: Se estiver rodando na HostGator, mude esta string para a URL do seu backend.
-// Exemplo: 'https://api.seusite.com.br/api' ou 'https://seusite.com.br/api'
-// No localhost, ele usa o fallback para 3002 (Porta atualizada).
+// Detecta se estamos rodando localmente ou em produção
 const getBaseUrl = () => {
     if (typeof window !== "undefined") {
+        // Se estiver em localhost (dev do Vite), aponta para o backend na porta 3002
         if (window.location.hostname === 'localhost') {
             return 'http://localhost:3002/api';
         }
-        // INSIRA AQUI A URL DO SEU BACKEND NA HOSPEDAGEM
-        // Se você usar subdomínio: 'https://api.seudominio.com/api'
-        return 'https://api.seusite.com/api'; 
+        // Se estiver em produção (Railway), usa caminho relativo
+        // (O front e o back estão no mesmo domínio)
+        return '/api'; 
     }
     return 'http://localhost:3002/api';
 }
@@ -43,7 +42,7 @@ export const authenticateUser = async (login: string, pass: string): Promise<Emp
         }
         return await response.json();
     } catch (e) {
-        console.error("Login error / Network error. Check if Backend is running on port 3002.", e);
+        console.error("Login error / Network error.", e);
         return null;
     }
 }
@@ -159,7 +158,6 @@ export const updateOrderFull = async (id: string, input: NewOrderInput): Promise
         body: JSON.stringify(updatedData)
     });
 
-    // The backend returns a message, so we just fetch the fresh order
     await handleResponse(response);
     return getOrderById(id);
 };
@@ -180,8 +178,6 @@ export const registerPayment = async (id: string, amount: number, method: string
 };
 
 export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus, location?: string): Promise<Order> => {
-    // We first need the current order to calculate timeline logic, OR do it in backend.
-    // To match previous logic, let's fetch, calculate timeline, and send patch.
     const order = await getOrderById(orderId);
     
     const timestamp = new Date().toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' });
