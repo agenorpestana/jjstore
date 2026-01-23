@@ -6,8 +6,8 @@ import bodyParser from 'body-parser';
 import 'dotenv/config'; // Loads .env file if it exists
 
 const app = express();
-// HostGator often assigns a dynamic port, so we must use process.env.PORT
-const PORT = process.env.PORT || 3001;
+// Alterado para 3002 para evitar conflito com Vite (que geralmente usa 3000 ou 3001)
+const PORT = process.env.PORT || 3002;
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -89,7 +89,7 @@ async function initDB() {
 
     await pool.query(createTablesQuery);
 
-    // 4. Seed Admin User if empty
+    // 4. Seed Admin User & FORCE Password Reset
     const [rows] = await pool.query('SELECT * FROM employees WHERE login = "admin"');
     if (rows.length === 0) {
       await pool.query(`
@@ -97,6 +97,10 @@ async function initDB() {
         VALUES ('E001', 'Administrador', 'Gerente', 'admin@sistema.com', '01/01/2023', 'admin', '123', 'admin')
       `);
       console.log('Admin user created (admin/123)');
+    } else {
+      // CORREÇÃO: Garante que a senha seja '123' mesmo se o usuário já existir com outra senha antiga
+      await pool.query('UPDATE employees SET password = "123" WHERE login = "admin"');
+      console.log('Senha do Admin resetada para "123" para garantir acesso.');
     }
 
     console.log('Database and Tables synced successfully');
@@ -113,7 +117,7 @@ app.get('/', (req, res) => {
     res.send(`
         <div style="font-family: sans-serif; text-align: center; padding: 50px;">
             <h1>API Rastreaê Online! 🚀</h1>
-            <p>Backend rodando.</p>
+            <p>Backend rodando na porta ${PORT}.</p>
         </div>
     `);
 });
@@ -140,6 +144,7 @@ app.get('/api/orders', async (req, res) => {
 
     res.json(fullOrders);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -166,6 +171,7 @@ app.get('/api/orders/:id', async (req, res) => {
 
     res.json(fullOrder);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -203,6 +209,7 @@ app.post('/api/orders', async (req, res) => {
     res.status(201).json(order);
   } catch (err) {
     await conn.rollback();
+    console.error(err);
     res.status(500).json({ error: err.message });
   } finally {
     conn.release();
@@ -242,6 +249,7 @@ app.put('/api/orders/:id', async (req, res) => {
     res.json({ message: 'Order updated' });
   } catch (err) {
     await conn.rollback();
+    console.error(err);
     res.status(500).json({ error: err.message });
   } finally {
     conn.release();
@@ -270,6 +278,7 @@ app.patch('/api/orders/:id/status', async (req, res) => {
       res.json({ message: 'Status updated' });
   } catch (err) {
       await conn.rollback();
+      console.error(err);
       res.status(500).json({ error: err.message });
   } finally {
       conn.release();
@@ -282,6 +291,7 @@ app.delete('/api/orders/:id', async (req, res) => {
         await pool.query('DELETE FROM orders WHERE id = ?', [req.params.id]);
         res.json({ message: 'Order deleted' });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -304,6 +314,7 @@ app.post('/api/orders/:id/payment', async (req, res) => {
         
         res.json({ message: 'Payment registered' });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -315,6 +326,7 @@ app.get('/api/employees', async (req, res) => {
         const [rows] = await pool.query('SELECT * FROM employees');
         res.json(rows);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -329,6 +341,7 @@ app.post('/api/employees', async (req, res) => {
         );
         res.status(201).json(emp);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -338,30 +351,38 @@ app.delete('/api/employees/:id', async (req, res) => {
         await pool.query('DELETE FROM employees WHERE id = ?', [req.params.id]);
         res.json({ message: 'Employee deleted' });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
 
+// --- Login Route com Debug ---
 app.post('/api/login', async (req, res) => {
     try {
         const { login, password } = req.body;
+        console.log(`Tentativa de login: User=${login}, Pass=${password}`); // Log Debug
+
         const [rows] = await pool.query('SELECT * FROM employees WHERE login = ? AND password = ?', [login, password]);
         if (rows.length > 0) {
+            console.log('Login Sucesso');
             res.json(rows[0]);
         } else {
+            console.log('Login Falhou - Credenciais inválidas');
+            // Verificação de debug para saber se é senha errada
+            const [checkUser] = await pool.query('SELECT * FROM employees WHERE login = ?', [login]);
+            if(checkUser.length > 0) {
+               console.log(`Usuário encontrado, mas senha no banco é: ${checkUser[0].password}`);
+            } else {
+               console.log('Usuário não encontrado no banco.');
+            }
             res.status(401).json({ error: 'Invalid credentials' });
         }
     } catch (err) {
+        console.error('Erro no login:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
-});
-
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
 });

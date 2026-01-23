@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Search, PackageOpen, ArrowLeft, Lock, User, LogIn, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, PackageOpen, ArrowLeft, Lock, User, LogIn, X, Download } from 'lucide-react';
 import { Order, Employee } from './types';
 import { getOrderById, authenticateUser } from './services/mockData';
 import { StatusTimeline } from './components/StatusTimeline';
@@ -14,11 +14,34 @@ function App() {
   const [loginForm, setLoginForm] = useState({ login: '', password: '' });
   const [loginError, setLoginError] = useState('');
 
+  // PWA Install State
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+
   // Customer View State
   const [orderId, setOrderId] = useState('');
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Handle PWA Install Prompt
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    installPrompt.userChoice.then((choiceResult: any) => {
+      if (choiceResult.outcome === 'accepted') {
+        setInstallPrompt(null);
+      }
+    });
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,6 +98,15 @@ function App() {
           </div>
           
           <div className="flex items-center gap-4">
+            {installPrompt && (
+              <button
+                onClick={handleInstallClick}
+                className="hidden sm:flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-primary px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
+              >
+                <Download size={16} /> Instalar App
+              </button>
+            )}
+
             {currentOrder && (
                 <button
                 onClick={clearSearch}
@@ -129,9 +161,13 @@ function App() {
             </form>
 
             <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm text-gray-500">
+              {installPrompt && (
+                <button onClick={handleInstallClick} className="px-3 py-1 bg-blue-50 text-blue-700 font-semibold rounded-full hover:bg-blue-100 transition-colors flex items-center gap-1">
+                  <Download size={14} /> Instalar App
+                </button>
+              )}
               <span className="px-3 py-1 bg-gray-100 rounded-full">🚀 Rastreamento Rápido</span>
               <span className="px-3 py-1 bg-gray-100 rounded-full">💬 Suporte IA</span>
-              <span className="px-3 py-1 bg-gray-100 rounded-full">📱 Mobile Friendly</span>
             </div>
             {error && <p className="mt-4 text-red-500 font-medium">{error}</p>}
           </div>
@@ -193,7 +229,7 @@ function App() {
                         <div className="relative">
                             <User className="absolute left-3 top-3 text-gray-400" size={18} />
                             <input 
-                                type="text"
+                                type="text" 
                                 className="w-full border border-gray-300 rounded-lg p-2.5 pl-10 focus:ring-2 focus:ring-primary focus:outline-none"
                                 placeholder="Usuário"
                                 value={loginForm.login}
@@ -206,7 +242,7 @@ function App() {
                         <div className="relative">
                             <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
                             <input 
-                                type="password"
+                                type="password" 
                                 className="w-full border border-gray-300 rounded-lg p-2.5 pl-10 focus:ring-2 focus:ring-primary focus:outline-none"
                                 placeholder="••••••"
                                 value={loginForm.password}

@@ -1,22 +1,24 @@
 
+
 import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput } from '../types';
 
 // ATENÇÃO: Se estiver rodando na HostGator, mude esta string para a URL do seu backend.
 // Exemplo: 'https://api.seusite.com.br/api' ou 'https://seusite.com.br/api'
-// No localhost, ele usa o fallback para 3001.
+// No localhost, ele usa o fallback para 3002 (Porta atualizada).
 const getBaseUrl = () => {
     if (typeof window !== "undefined") {
         if (window.location.hostname === 'localhost') {
-            return 'http://localhost:3001/api';
+            return 'http://localhost:3002/api';
         }
         // INSIRA AQUI A URL DO SEU BACKEND NA HOSPEDAGEM
         // Se você usar subdomínio: 'https://api.seudominio.com/api'
         return 'https://api.seusite.com/api'; 
     }
-    return 'http://localhost:3001/api';
+    return 'http://localhost:3002/api';
 }
 
 const API_URL = getBaseUrl();
+console.log("Connecting to Backend API at:", API_URL);
 
 // --- Helper for Errors ---
 const handleResponse = async (response: Response) => {
@@ -35,10 +37,13 @@ export const authenticateUser = async (login: string, pass: string): Promise<Emp
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ login, password: pass })
         });
-        if (!response.ok) return null;
+        if (!response.ok) {
+            console.warn("Authentication failed with status:", response.status);
+            return null;
+        }
         return await response.json();
     } catch (e) {
-        console.error("Login error", e);
+        console.error("Login error / Network error. Check if Backend is running on port 3002.", e);
         return null;
     }
 }
