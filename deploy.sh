@@ -88,10 +88,34 @@ npm run build
 
 # 9. Configurar PM2
 echo -e "${GREEN}>>> Iniciando aplicação com PM2...${NC}"
-pm2 stop rastreae-app 2>/dev/null || true
+
+# CRUCIAL: Gerar o arquivo de configuração do PM2 dinamicamente
+# Isso resolve o erro "No script path" se o arquivo não existir no git
+cat > ecosystem.config.cjs <<EOF
+module.exports = {
+  apps: [{
+    name: "rastreae-app",
+    script: "server.js",
+    env: {
+      NODE_ENV: "production",
+      PORT: 3002
+    }
+  }]
+};
+EOF
+
+# Garante que o PM2 pare processos antigos com o mesmo nome
+pm2 delete rastreae-app 2>/dev/null || true
+
+# Inicia a aplicação usando o arquivo de configuração recém-criado
 pm2 start ecosystem.config.cjs
+
+# Salva a lista de processos para reiniciar após reboot
 pm2 save
-pm2 startup | bash # Executa o comando necessário para persistência
+
+# Tenta configurar o startup script automaticamente
+# (Executa o output do comando pm2 startup se contiver sudo/systemd)
+pm2 startup | grep "sudo" | bash 2>/dev/null || true
 
 # 10. Configurar Nginx
 echo -e "${GREEN}>>> Configurando Nginx (Reverse Proxy)...${NC}"
