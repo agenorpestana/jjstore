@@ -361,7 +361,8 @@ app.post('/api/login', async (req, res) => {
 
 // CATCH ALL: Qualquer rota que não seja /api devolve o index.html do React
 // Isso permite que o React Router funcione
-app.get('*', (req, res) => {
+// Using regex for compatibility with Express 5
+app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 

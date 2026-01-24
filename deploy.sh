@@ -83,7 +83,14 @@ EOF
 
 # 8. Instalação e Build
 echo -e "${GREEN}>>> Instalando pacotes e gerando Build do Frontend...${NC}"
+
+# CORREÇÃO CRÍTICA PARA ERRO 502:
+# 1. Garante que o package.json tenha "type": "module" pois o server.js usa imports
+# 2. Instala explicitamente as dependências do servidor caso faltem no package.json
+echo "Ajustando configuração do Node.js..."
+npm pkg set type=module
 npm install
+npm install express mysql2 cors dotenv body-parser # Garante que o backend tenha o necessário
 npm run build
 
 # 9. Configurar PM2
