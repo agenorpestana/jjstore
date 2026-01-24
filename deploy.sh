@@ -40,7 +40,6 @@ systemctl start mysql
 systemctl enable mysql
 
 # Criação do Banco e Usuário via SQL
-# Nota: Em VPS Ubuntu novas, o root do MySQL usa auth_socket (sudo sem senha), o que facilita automação
 sudo mysql -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};"
 sudo mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';"
 sudo mysql -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';"
@@ -84,20 +83,23 @@ EOF
 # 8. Instalação e Build
 echo -e "${GREEN}>>> Instalando pacotes e gerando Build do Frontend...${NC}"
 
-# CORREÇÃO CRÍTICA PARA ERRO 502:
-# 1. Garante que o package.json tenha "type": "module" pois o server.js usa imports
-# 2. Instala explicitamente as dependências do servidor caso faltem no package.json
 echo "Ajustando configuração do Node.js..."
 npm pkg set type=module
 npm install
-npm install express mysql2 cors dotenv body-parser # Garante que o backend tenha o necessário
+
+# Instala explicitamente dependências do Backend E Frontend para garantir que o build funcione
+# mesmo se o package.json estiver incompleto no git
+echo "Instalando dependências críticas..."
+npm install express mysql2 cors dotenv body-parser
+npm install -D vite @vitejs/plugin-react typescript @types/react @types/react-dom
+npm install react react-dom lucide-react @google/genai
+
+echo "Gerando build..."
 npm run build
 
 # 9. Configurar PM2
 echo -e "${GREEN}>>> Iniciando aplicação com PM2...${NC}"
 
-# CRUCIAL: Gerar o arquivo de configuração do PM2 dinamicamente
-# Isso resolve o erro "No script path" se o arquivo não existir no git
 cat > ecosystem.config.cjs <<EOF
 module.exports = {
   apps: [{
@@ -111,17 +113,9 @@ module.exports = {
 };
 EOF
 
-# Garante que o PM2 pare processos antigos com o mesmo nome
 pm2 delete rastreae-app 2>/dev/null || true
-
-# Inicia a aplicação usando o arquivo de configuração recém-criado
 pm2 start ecosystem.config.cjs
-
-# Salva a lista de processos para reiniciar após reboot
 pm2 save
-
-# Tenta configurar o startup script automaticamente
-# (Executa o output do comando pm2 startup se contiver sudo/systemd)
 pm2 startup | grep "sudo" | bash 2>/dev/null || true
 
 # 10. Configurar Nginx
@@ -146,14 +140,12 @@ server {
 }
 EOF
 
-# Ativar site e remover default se existir
 ln -sfn $NGINX_CONF /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl restart nginx
 
 # 11. Configurar SSL (Certbot)
 echo -e "${GREEN}>>> Configurando SSL Gratuito (Let's Encrypt)...${NC}"
-# Tenta obter o SSL. Se falhar (por DNS não propagado), avisa mas não quebra o script todo
 if certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos -m admin@$DOMAIN_NAME --redirect; then
     echo -e "${GREEN}SSL Configurado com sucesso!${NC}"
 else
@@ -164,4 +156,3 @@ fi
 
 echo -e "${GREEN}=== INSTALAÇÃO CONCLUÍDA! ===${NC}"
 echo -e "Acesse seu site em: https://$DOMAIN_NAME"
-echo -e "Banco de dados local configurado: $DB_NAME (Usuário: $DB_USER)"
