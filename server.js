@@ -309,14 +309,8 @@ app.post('/api/orders/:id/payment', async (req, res) => {
     }
 });
 
-app.get('/api/employees', async (req, res) => {
-    try {
-        const [rows] = await pool.query('SELECT * FROM employees');
-        res.json(rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
-    }
+app.get("/", (req, res) => {
+  res.send("API JJSTORE ONLINE 🚀");
 });
 
 app.post('/api/employees', async (req, res) => {
@@ -371,7 +365,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
 
-app.get("/", (req, res) => {
-  res.send("API JJSTORE ONLINE 🚀");
-});
+
 
