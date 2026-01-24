@@ -131,7 +131,7 @@ function App() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {!currentOrder ? (
           /* Landing / Search State */
-          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-in fade-in zoom-in duration-500">
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
             <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 mb-6 tracking-tight">
               Acompanhe seu pedido <br />
               <span className="text-primary bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">em tempo real</span>
@@ -173,7 +173,7 @@ function App() {
           </div>
         ) : (
           /* Results State */
-          <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+          <div className="space-y-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">Pedido #{currentOrder.id}</h2>

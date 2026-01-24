@@ -138,7 +138,7 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order }) => {
       {/* Lightbox Modal */}
       {expandedImage && (
         <div 
-            className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in duration-200"
+            className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4 cursor-zoom-out"
             onClick={() => setExpandedImage(null)}
         >
             <button 

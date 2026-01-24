@@ -74,7 +74,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ order }) => {
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
       {/* Chat Window */}
       {isOpen && (
-        <div className="bg-white w-80 h-96 rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden border border-gray-200 animate-in slide-in-from-bottom-10 fade-in duration-300">
+        <div className="bg-white w-80 h-96 rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden border border-gray-200">
           {/* Header */}
           <div className="bg-primary p-4 flex justify-between items-center text-white">
             <div className="flex items-center gap-2">

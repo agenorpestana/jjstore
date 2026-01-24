@@ -359,10 +359,9 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// CATCH ALL: Qualquer rota que não seja /api devolve o index.html do React
-// Isso permite que o React Router funcione
-// Using regex for compatibility with Express 5
-app.get(/.*/, (req, res) => {
+// CATCH ALL: Retorna index.html para qualquer rota que NÃO comece com /api
+// Isso evita que chamadas de API quebradas retornem HTML e causem erros silenciosos
+app.get(/^(?!\/api).+/, (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
