@@ -1,13 +1,12 @@
 {
-  "name": "rastreae-acompanhamento-de-pedidos",
+  "name": "rastreaê---acompanhamento-de-pedidos",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "start": "node server.js"
+    "preview": "vite preview"
   },
   "dependencies": {
     "react": "^19.2.3",
@@ -18,7 +17,9 @@
     "body-parser": "^2.2.2",
     "cors": "^2.8.6",
     "mysql2": "^3.16.1",
-    "dotenv": "^17.2.3"
+    "dotenv": "^17.2.3",
+    "url": "^0.11.4",
+    "path": "^0.12.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
