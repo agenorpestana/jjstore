@@ -1,3 +1,4 @@
+
 export enum OrderStatus {
   PEDIDO_FEITO = 'PEDIDO_FEITO',
   EM_PRODUCAO = 'EM_PRODUCAO',
@@ -74,4 +75,9 @@ export interface NewEmployeeInput {
   login: string;
   password?: string;
   accessLevel: AccessLevel;
+}
+
+export interface AppSettings {
+  appName: string;
+  logoUrl: string | null; // Pode ser URL ou Base64
 }

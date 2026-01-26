@@ -1,16 +1,19 @@
+
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield } from 'lucide-react';
-import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput } from '../types';
-import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder } from '../services/mockData';
+import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save } from 'lucide-react';
+import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings } from '../types';
+import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings } from '../services/mockData';
 
 interface AdminDashboardProps {
   currentUser: Employee;
   onLogout: () => void;
+  appSettings: AppSettings;
+  onUpdateSettings: () => void;
 }
 
-type Tab = 'orders' | 'employees';
+type Tab = 'orders' | 'employees' | 'settings';
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onLogout }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onLogout, appSettings, onUpdateSettings }) => {
   const [activeTab, setActiveTab] = useState<Tab>('orders');
   const [orders, setOrders] = useState<Order[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -38,6 +41,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethodRemaining, setPaymentMethodRemaining] = useState('Pix');
 
+  // Settings State
+  const [settingsForm, setSettingsForm] = useState<AppSettings>(appSettings);
+
   // --- Data Loading ---
   const refreshOrders = async () => {
     setLoading(true);
@@ -56,8 +62,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
   useEffect(() => {
     if (activeTab === 'orders') refreshOrders();
-    else refreshEmployees();
-  }, [activeTab]);
+    else if (activeTab === 'employees') refreshEmployees();
+    else if (activeTab === 'settings') setSettingsForm(appSettings);
+  }, [activeTab, appSettings]);
 
   // --- Order Filtering & Pagination Logic ---
   const filteredOrders = orders.filter(order => 
@@ -245,6 +252,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       }
   }
 
+  // --- Settings Logic ---
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files[0]) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              if (typeof reader.result === 'string') {
+                  setSettingsForm(prev => ({...prev, logoUrl: reader.result as string}));
+              }
+          };
+          reader.readAsDataURL(files[0]);
+      }
+  }
+
+  const handleSaveSettings = async () => {
+      if (!isAdmin) return;
+      await updateAppSettings(settingsForm);
+      onUpdateSettings(); // Refresh app level state
+      alert('Configurações salvas com sucesso!');
+  }
+
   // --- Status Update Logic ---
   const [updateStatusLocation, setUpdateStatusLocation] = useState('');
   
@@ -315,7 +343,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           @page { size: A4; margin: 1cm; }
           body { font-family: 'Segoe UI', sans-serif; color: #1f2937; line-height: 1.5; }
           .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-          .logo { font-size: 24px; font-weight: bold; color: #2563eb; }
+          .logo { font-size: 24px; font-weight: bold; color: #2563eb; display:flex; align-items:center; gap: 10px; }
+          .logo img { height: 40px; }
           .order-id { font-size: 18px; color: #4b5563; }
           .section { margin-bottom: 25px; }
           .section-title { font-size: 14px; font-weight: bold; text-transform: uppercase; color: #6b7280; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px; }
@@ -370,7 +399,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       </head>
       <body>
         <div class="header">
-          <div class="logo">Rastreaê</div>
+          <div class="logo">
+             ${appSettings.logoUrl ? `<img src="${appSettings.logoUrl}" />` : ''}
+             ${appSettings.appName}
+          </div>
           <div class="order-id">Pedido #${viewingOrder.id}</div>
         </div>
 
@@ -504,17 +536,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
           <div className="flex items-center gap-3">
-             <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <Package className="text-primary" /> Painel Administrativo
-             </h1>
+             <div className="flex items-center gap-2">
+                 {appSettings.logoUrl ? (
+                     <img src={appSettings.logoUrl} alt="Logo" className="h-8 w-auto" />
+                 ) : (
+                    <Package className="text-primary" /> 
+                 )}
+                 <h1 className="text-xl font-bold text-gray-800">{appSettings.appName}</h1>
+             </div>
              <span className={`px-2 py-0.5 rounded-md text-xs font-semibold uppercase ${isAdmin ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
                  {isAdmin ? 'Admin' : 'Usuário'}
              </span>
-             <span className="text-sm text-gray-500 hidden sm:inline">| Olá, {currentUser.name}</span>
           </div>
-          <button onClick={onLogout} className="text-gray-500 hover:text-red-600 text-sm font-medium flex items-center gap-1">
-            <X size={16} /> Sair
-          </button>
+          <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-500 hidden sm:inline">Olá, {currentUser.name}</span>
+              <button onClick={onLogout} className="text-gray-500 hover:text-red-600 text-sm font-medium flex items-center gap-1">
+                <X size={16} /> Sair
+              </button>
+          </div>
         </div>
       </div>
 
@@ -535,6 +574,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'employees' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
                         <Users size={16} /> Funcionários
+                    </button>
+                )}
+                {isAdmin && (
+                     <button 
+                        onClick={() => setActiveTab('settings')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'settings' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        <Settings size={16} /> Configurações
                     </button>
                 )}
             </div>
@@ -744,6 +791,69 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                  </table>
              </div>
          </div>
+        )}
+
+        {/* --- SETTINGS TAB (ADMIN ONLY) --- */}
+        {activeTab === 'settings' && isAdmin && (
+            <div className="max-w-2xl mx-auto">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="p-6 border-b border-gray-100">
+                        <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <Settings className="text-primary" size={20} /> Configurações do Sistema
+                        </h2>
+                        <p className="text-sm text-gray-500 mt-1">Personalize a identidade visual do seu aplicativo.</p>
+                    </div>
+                    <div className="p-8 space-y-6">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Aplicativo</label>
+                            <input 
+                                type="text" 
+                                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:outline-none"
+                                value={settingsForm.appName}
+                                onChange={e => setSettingsForm({...settingsForm, appName: e.target.value})}
+                                placeholder="Ex: Minha Empresa"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Logo do Aplicativo</label>
+                            <div className="flex items-center gap-6">
+                                <div className="w-24 h-24 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
+                                    {settingsForm.logoUrl ? (
+                                        <img src={settingsForm.logoUrl} alt="Logo Preview" className="w-full h-full object-contain" />
+                                    ) : (
+                                        <ImageIcon className="text-gray-300" size={32} />
+                                    )}
+                                </div>
+                                <div className="flex-1">
+                                    <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                                        <Upload size={16} /> Escolher Imagem
+                                        <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                                    </label>
+                                    <p className="text-xs text-gray-500 mt-2">Recomendado: Imagem PNG com fundo transparente.</p>
+                                    {settingsForm.logoUrl && (
+                                        <button 
+                                            onClick={() => setSettingsForm({...settingsForm, logoUrl: ''})}
+                                            className="mt-2 text-xs text-red-500 hover:text-red-700 font-medium"
+                                        >
+                                            Remover Logo
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-100 flex justify-end">
+                            <button 
+                                onClick={handleSaveSettings}
+                                className="bg-primary hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg flex items-center gap-2 font-medium transition shadow-sm"
+                            >
+                                <Save size={18} /> Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         )}
 
       </div>

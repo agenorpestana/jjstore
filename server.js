@@ -95,18 +95,17 @@ async function initDB() {
         photo_data LONGTEXT,
         FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS app_settings (
+        setting_key VARCHAR(50) PRIMARY KEY,
+        setting_value LONGTEXT
+      );
     `;
 
     await pool.query(createTablesQuery);
 
     // --- MIGRATION CHECK ---
-    // Verifica e adiciona colunas se não existirem
-    // Isso garante atualização suave do banco
     const migrationQueries = [
-       // Exemplo: Se precisar adicionar campo 'email' em customers futuramente
-       // "ALTER TABLE orders ADD COLUMN IF NOT EXISTS email VARCHAR(100)",
-       
-       // Garante que campos opcionais usados no código existam
        "ALTER TABLE orders ADD COLUMN pressingDate VARCHAR(20)",
        "ALTER TABLE orders ADD COLUMN seamstress VARCHAR(100)",
        "ALTER TABLE order_items ADD COLUMN size VARCHAR(20)"
@@ -114,15 +113,19 @@ async function initDB() {
 
     for (const query of migrationQueries) {
         try {
-            // Em MySQL não existe ADD COLUMN IF NOT EXISTS nativo em versões antigas,
-            // então usamos try/catch para ignorar erro de coluna duplicada
             await pool.query(query);
         } catch (e) {
-            // Ignora erro 1060 (Duplicate column name)
             if (e.errno !== 1060) {
-               // console.log(`Migration Note: ${e.message}`);
+               // Ignora erro de coluna duplicada
             }
         }
+    }
+
+    // Seed Default Settings
+    const [settingsRows] = await pool.query('SELECT * FROM app_settings WHERE setting_key = "appName"');
+    if (settingsRows.length === 0) {
+        await pool.query('INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?)', ['appName', 'Rastreaê']);
+        await pool.query('INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?)', ['logoUrl', '']);
     }
 
     // Seed Admin
@@ -149,6 +152,41 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', port: PORT });
 });
 
+// --- Settings Routes ---
+app.get('/api/settings', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM app_settings');
+        const settings = {
+            appName: 'Rastreaê',
+            logoUrl: ''
+        };
+        rows.forEach(row => {
+            if (row.setting_key === 'appName') settings.appName = row.setting_value;
+            if (row.setting_key === 'logoUrl') settings.logoUrl = row.setting_value;
+        });
+        res.json(settings);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/settings', async (req, res) => {
+    try {
+        const { appName, logoUrl } = req.body;
+        
+        // Upsert logic
+        await pool.query('INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?', ['appName', appName, appName]);
+        await pool.query('INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?', ['logoUrl', logoUrl, logoUrl]);
+        
+        res.json({ message: 'Settings updated' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Order Routes ---
 app.get('/api/orders', async (req, res) => {
   try {
     const [orders] = await pool.query('SELECT * FROM orders');
@@ -383,7 +421,6 @@ app.post('/api/login', async (req, res) => {
 });
 
 // CATCH ALL: Retorna index.html para qualquer rota que NÃO comece com /api
-// Isso evita que chamadas de API quebradas retornem HTML e causem erros silenciosos
 app.get(/^(?!\/api).+/, (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });

@@ -1,16 +1,12 @@
 
-
-import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput } from '../types';
+import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings } from '../types';
 
 // Detecta se estamos rodando localmente ou em produção
 const getBaseUrl = () => {
     if (typeof window !== "undefined") {
-        // Se estiver em localhost (dev do Vite), aponta para o backend na porta 3002
         if (window.location.hostname === 'localhost') {
             return 'http://localhost:3002/api';
         }
-        // Se estiver em produção (Railway), usa caminho relativo
-        // (O front e o back estão no mesmo domínio)
         return '/api'; 
     }
     return 'http://localhost:3002/api';
@@ -26,6 +22,21 @@ const handleResponse = async (response: Response) => {
     throw new Error(error.error || response.statusText);
   }
   return response.json();
+};
+
+// --- Settings ---
+export const getAppSettings = async (): Promise<AppSettings> => {
+    const response = await fetch(`${API_URL}/settings`);
+    return handleResponse(response);
+};
+
+export const updateAppSettings = async (settings: AppSettings): Promise<void> => {
+    const response = await fetch(`${API_URL}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+    });
+    await handleResponse(response);
 };
 
 // --- Authentication ---

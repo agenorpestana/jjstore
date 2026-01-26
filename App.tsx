@@ -1,13 +1,17 @@
+
 import React, { useState, useEffect } from 'react';
 import { Search, PackageOpen, ArrowLeft, Lock, User, LogIn, X, Download } from 'lucide-react';
-import { Order, Employee } from './types';
-import { getOrderById, authenticateUser } from './services/mockData';
+import { Order, Employee, AppSettings } from './types';
+import { getOrderById, authenticateUser, getAppSettings } from './services/mockData';
 import { StatusTimeline } from './components/StatusTimeline';
 import { OrderDetails } from './components/OrderDetails';
 import { SupportChat } from './components/SupportChat';
 import { AdminDashboard } from './components/AdminDashboard';
 
 function App() {
+  // Global Settings State
+  const [appSettings, setAppSettings] = useState<AppSettings>({ appName: 'Rastreaê', logoUrl: '' });
+
   // Authentication State
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -23,8 +27,20 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Handle PWA Install Prompt
+  // Load Settings on Mount
+  const loadSettings = async () => {
+    try {
+        const settings = await getAppSettings();
+        setAppSettings(settings);
+        document.title = `${settings.appName} - Acompanhamento de Pedidos`;
+    } catch (e) {
+        console.error("Failed to load settings", e);
+    }
+  };
+
   useEffect(() => {
+    loadSettings();
+    // Handle PWA Install Prompt
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setInstallPrompt(e);
@@ -82,7 +98,14 @@ function App() {
 
   // If Logged In, Render Dashboard
   if (currentUser) {
-    return <AdminDashboard currentUser={currentUser} onLogout={() => setCurrentUser(null)} />;
+    return (
+        <AdminDashboard 
+            currentUser={currentUser} 
+            onLogout={() => setCurrentUser(null)}
+            appSettings={appSettings}
+            onUpdateSettings={loadSettings}
+        />
+    );
   }
 
   return (
@@ -91,10 +114,14 @@ function App() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={clearSearch}>
-            <div className="bg-primary p-2 rounded-lg text-white">
-              <PackageOpen size={24} />
-            </div>
-            <span className="font-bold text-xl text-gray-900 tracking-tight">Rastreaê</span>
+            {appSettings.logoUrl ? (
+                <img src={appSettings.logoUrl} alt="Logo" className="h-10 w-auto object-contain" />
+            ) : (
+                <div className="bg-primary p-2 rounded-lg text-white">
+                    <PackageOpen size={24} />
+                </div>
+            )}
+            <span className="font-bold text-xl text-gray-900 tracking-tight">{appSettings.appName}</span>
           </div>
           
           <div className="flex items-center gap-4">
