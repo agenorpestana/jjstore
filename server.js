@@ -99,6 +99,32 @@ async function initDB() {
 
     await pool.query(createTablesQuery);
 
+    // --- MIGRATION CHECK ---
+    // Verifica e adiciona colunas se não existirem
+    // Isso garante atualização suave do banco
+    const migrationQueries = [
+       // Exemplo: Se precisar adicionar campo 'email' em customers futuramente
+       // "ALTER TABLE orders ADD COLUMN IF NOT EXISTS email VARCHAR(100)",
+       
+       // Garante que campos opcionais usados no código existam
+       "ALTER TABLE orders ADD COLUMN pressingDate VARCHAR(20)",
+       "ALTER TABLE orders ADD COLUMN seamstress VARCHAR(100)",
+       "ALTER TABLE order_items ADD COLUMN size VARCHAR(20)"
+    ];
+
+    for (const query of migrationQueries) {
+        try {
+            // Em MySQL não existe ADD COLUMN IF NOT EXISTS nativo em versões antigas,
+            // então usamos try/catch para ignorar erro de coluna duplicada
+            await pool.query(query);
+        } catch (e) {
+            // Ignora erro 1060 (Duplicate column name)
+            if (e.errno !== 1060) {
+               // console.log(`Migration Note: ${e.message}`);
+            }
+        }
+    }
+
     // Seed Admin
     const [rows] = await pool.query('SELECT * FROM employees WHERE login = "admin"');
     if (rows.length === 0) {
@@ -107,9 +133,6 @@ async function initDB() {
         VALUES ('E001', 'Administrador', 'Gerente', 'admin@sistema.com', '01/01/2023', 'admin', '123', 'admin')
       `);
       console.log('Admin user created (admin/123)');
-    } else {
-       // Reset senha admin se necessário
-       // await pool.query('UPDATE employees SET password = "123" WHERE login = "admin"');
     }
 
     console.log('Database synced successfully');

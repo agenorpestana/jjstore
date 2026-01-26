@@ -278,12 +278,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       setViewingOrder(updatedOrder);
   }
 
+  // --- Helpers for Aggregation ---
+  const getSizeSummary = (items: { size: string; quantity: number }[]) => {
+      const summary: Record<string, number> = {};
+      let totalItems = 0;
+
+      items.forEach(item => {
+          const size = item.size ? item.size.toUpperCase().trim() : 'UN';
+          summary[size] = (summary[size] || 0) + item.quantity;
+          totalItems += item.quantity;
+      });
+
+      return { summary, totalItems };
+  };
+
   // --- Print Logic ---
   const handlePrintOrder = () => {
     if (!viewingOrder) return;
-
+    const { summary, totalItems } = getSizeSummary(viewingOrder.items);
     const printWindow = window.open('', '', 'width=900,height=800');
     if (!printWindow) return;
+
+    const summaryRows = Object.entries(summary).map(([size, qty]) => `
+        <tr>
+            <td style="text-align: left; padding: 5px;">${size}</td>
+            <td style="text-align: center; padding: 5px;">${qty}</td>
+        </tr>
+    `).join('');
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -331,6 +352,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           td { padding: 10px; border-bottom: 1px solid #f3f4f6; font-size: 14px; color: #1f2937; }
           .text-center { text-align: center; }
           
+          .summary-box { 
+              margin-top: 20px; 
+              width: 50%; 
+              border: 1px solid #e5e7eb;
+          }
+          .total-row {
+              background-color: #f9fafb;
+              font-weight: bold;
+              border-top: 2px solid #e5e7eb;
+          }
+
           @media print {
             body { -webkit-print-color-adjust: exact; }
           }
@@ -394,6 +426,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
               `).join('')}
             </tbody>
           </table>
+        </div>
+
+        <div class="section">
+            <div class="summary-box">
+                <div class="section-title" style="border:none; padding: 10px; margin:0; background:#f3f4f6;">Resumo por Tamanho</div>
+                <table style="margin:0;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 5px;">Tamanho</th>
+                            <th style="padding: 5px; text-align: center;">Qtd</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${summaryRows}
+                        <tr class="total-row">
+                            <td style="padding: 10px;">TOTAL DE ITENS</td>
+                            <td style="padding: 10px; text-align: center;">${totalItems}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         ${viewingOrder.photos && viewingOrder.photos.length > 0 ? `
@@ -1194,6 +1247,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Quantity Summary */}
+                    <div className="flex justify-end mb-6">
+                        <div className="w-full md:w-1/2 bg-white rounded-xl border border-gray-200 overflow-hidden">
+                             <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                                 <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total por Tamanho</h4>
+                             </div>
+                             <table className="min-w-full divide-y divide-gray-100">
+                                <tbody>
+                                    {Object.entries(getSizeSummary(viewingOrder.items).summary).map(([size, qty]) => (
+                                        <tr key={size}>
+                                            <td className="px-4 py-2 text-sm text-gray-600">{size}</td>
+                                            <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">{qty}</td>
+                                        </tr>
+                                    ))}
+                                     <tr className="bg-gray-50 font-bold">
+                                         <td className="px-4 py-2 text-sm text-gray-800">TOTAL DE ITENS</td>
+                                         <td className="px-4 py-2 text-sm text-gray-800 text-right">{getSizeSummary(viewingOrder.items).totalItems}</td>
+                                     </tr>
+                                </tbody>
+                             </table>
+                        </div>
                     </div>
 
                     {/* Financial Summary */}

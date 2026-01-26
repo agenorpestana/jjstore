@@ -10,6 +10,21 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order }) => {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const remainingBalance = order.total - (order.downPayment || 0);
 
+  const getSizeSummary = () => {
+      const summary: Record<string, number> = {};
+      let totalItems = 0;
+
+      order.items.forEach(item => {
+          const size = item.size ? item.size.toUpperCase().trim() : 'UN';
+          summary[size] = (summary[size] || 0) + item.quantity;
+          totalItems += item.quantity;
+      });
+
+      return { summary, totalItems };
+  };
+
+  const { summary, totalItems } = getSizeSummary();
+
   return (
     <div className="space-y-6">
       {/* Info Grid */}
@@ -132,6 +147,25 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order }) => {
                     </div>
                 </div>
             ))}
+        </div>
+        
+        {/* Total Summary */}
+        <div className="bg-gray-50 p-4 border-t border-gray-200">
+             <div className="mb-2">
+                 <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Total por Tamanho</h4>
+                 <div className="grid grid-cols-2 gap-2">
+                     {Object.entries(summary).map(([size, qty]) => (
+                         <div key={size} className="flex justify-between text-sm bg-white px-3 py-1.5 rounded border border-gray-100">
+                             <span className="text-gray-600 font-medium">{size}</span>
+                             <span className="text-gray-900 font-bold">{qty}</span>
+                         </div>
+                     ))}
+                 </div>
+             </div>
+             <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
+                 <span className="text-sm font-bold text-gray-800">TOTAL DE ITENS</span>
+                 <span className="text-lg font-bold text-gray-900 bg-white px-4 py-1 rounded border border-gray-200 shadow-sm">{totalItems}</span>
+             </div>
         </div>
       </div>
 
