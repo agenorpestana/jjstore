@@ -222,9 +222,13 @@ app.delete('/api/plans/:id', async (req, res) => {
 // --- SAAS ADMIN: COMPANIES MANAGEMENT ---
 app.get('/api/saas/companies', async (req, res) => {
     try {
-        // Query to get company info + admin contact info
+        // CORREÇÃO: Usar agregação (MAX) para os campos da tabela employees
+        // Isso satisfaz o modo 'only_full_group_by' do MySQL
         const query = `
-            SELECT c.*, e.name as adminName, e.contact, e.login 
+            SELECT c.*, 
+                   MAX(e.name) as adminName, 
+                   MAX(e.contact) as contact, 
+                   MAX(e.login) as login 
             FROM companies c 
             LEFT JOIN employees e ON c.id = e.company_id AND e.accessLevel = 'admin'
             GROUP BY c.id
@@ -232,6 +236,7 @@ app.get('/api/saas/companies', async (req, res) => {
         const [rows] = await pool.query(query);
         res.json(rows);
     } catch (err) {
+        console.error("SQL Error:", err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -610,6 +615,13 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+// CORREÇÃO: Rota específica para servir o Service Worker com o Content-Type correto
+app.get('/service-worker.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.sendFile(path.join(__dirname, 'service-worker.js'));
+});
+
+// CATCH ALL: Retorna index.html para qualquer rota que NÃO comece com /api (e não seja o SW)
 app.get(/^(?!\/api).+/, (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
