@@ -378,6 +378,55 @@ app.patch('/api/saas/companies/:id/status', async (req, res) => {
     }
 });
 
+// NOVO: Renovar manualmente (dinheiro em mãos)
+app.post('/api/saas/companies/:id/renew', async (req, res) => {
+    try {
+        const { id } = req.params;
+        // Pega data atual de vencimento
+        const [rows] = await pool.query("SELECT next_payment_due FROM companies WHERE id = ?", [id]);
+        if (rows.length === 0) return res.status(404).json({ error: "Empresa não encontrada" });
+
+        let baseDate = new Date();
+        // Se a data de vencimento for futura, soma a partir dela. Se já venceu, soma a partir de hoje.
+        if (rows[0].next_payment_due && new Date(rows[0].next_payment_due) > baseDate) {
+            baseDate = new Date(rows[0].next_payment_due);
+        }
+
+        // Adiciona 30 dias
+        baseDate.setDate(baseDate.getDate() + 30);
+
+        await pool.query(
+            "UPDATE companies SET status = 'active', last_payment_date = NOW(), next_payment_due = ? WHERE id = ?",
+            [baseDate, id]
+        );
+
+        res.json({ message: 'Assinatura renovada manualmente com sucesso' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// NOVO: Excluir empresa com validação de pedidos
+app.delete('/api/saas/companies/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Verifica se tem pedidos
+        const [orderCount] = await pool.query("SELECT COUNT(*) as count FROM orders WHERE company_id = ?", [id]);
+        
+        if (orderCount[0].count > 0) {
+            return res.status(400).json({ error: "Não é possível excluir: Esta empresa possui pedidos cadastrados." });
+        }
+
+        // Se não tiver pedidos, pode excluir (Cascade cuidará de employees e settings)
+        await pool.query("DELETE FROM companies WHERE id = ?", [id]);
+        
+        res.json({ message: 'Empresa excluída com sucesso' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 // --- SAAS REGISTRATION ---
 app.post('/api/register-company', async (req, res) => {

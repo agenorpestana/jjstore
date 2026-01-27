@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Building, X, Search, Shield, LogOut, LayoutList, Plus, Edit2, Trash2, CheckCircle, Ban, Phone, User, Calendar, CreditCard, Settings, Save } from 'lucide-react';
+import { Building, X, Search, Shield, LogOut, LayoutList, Plus, Edit2, Trash2, CheckCircle, Ban, Phone, User, Calendar, CreditCard, Settings, Save, DollarSign } from 'lucide-react';
 import { Employee, Company, Plan } from '../types';
-import { getCompanies, updateCompanyStatus, getPlans, createPlan, updatePlan, deletePlan, registerCompany, getSaasSettings, saveSaasSettings } from '../services/mockData';
+import { getCompanies, updateCompanyStatus, getPlans, createPlan, updatePlan, deletePlan, registerCompany, getSaasSettings, saveSaasSettings, manualRenewCompany, deleteCompany } from '../services/mockData';
 
 interface SuperAdminDashboardProps {
   currentUser: Employee;
@@ -83,6 +83,30 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
           fetchCompanies();
       }
   };
+
+  const handleManualRenew = async (id: string, name: string) => {
+      if (window.confirm(`Confirmar pagamento manual (dinheiro/outros) para a empresa ${name}?\n\nIsso adicionará 30 dias à assinatura.`)) {
+          try {
+              await manualRenewCompany(id);
+              alert('Assinatura renovada com sucesso!');
+              fetchCompanies();
+          } catch (e: any) {
+              alert(e.message || 'Erro ao renovar.');
+          }
+      }
+  }
+
+  const handleDeleteCompany = async (id: string, name: string) => {
+      if (window.confirm(`ATENÇÃO: Deseja excluir a empresa ${name}?\n\nEsta ação é irreversível. Só é possível excluir se a empresa NÃO tiver pedidos vinculados.`)) {
+          try {
+              await deleteCompany(id);
+              alert('Empresa excluída com sucesso!');
+              fetchCompanies();
+          } catch (e: any) {
+              alert(e.message || 'Erro ao excluir. Verifique se existem pedidos.');
+          }
+      }
+  }
 
   // --- Plan Logic ---
   const handleOpenPlanModal = (plan?: Plan) => {
@@ -213,6 +237,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
                                           {company.trial_ends_at && (
                                               <div className="text-xs text-blue-500 mt-1">Trial até: {new Date(company.trial_ends_at).toLocaleDateString()}</div>
                                           )}
+                                          {company.next_payment_due && (
+                                              <div className="text-xs text-gray-500 mt-1">Vence: {new Date(company.next_payment_due).toLocaleDateString()}</div>
+                                          )}
                                       </td>
                                       <td className="px-6 py-4">
                                           <div className="flex flex-col text-sm">
@@ -241,16 +268,35 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
                                           )}
                                       </td>
                                       <td className="px-6 py-4 text-right">
-                                          <button 
-                                              onClick={() => handleToggleStatus(company.id, company.status)}
-                                              className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${
-                                                  company.status === 'inactive' 
-                                                  ? 'text-green-600 bg-green-50 hover:bg-green-100'
-                                                  : 'text-red-600 bg-red-50 hover:bg-red-100' 
-                                              }`}
-                                          >
-                                              {company.status === 'inactive' ? 'Ativar' : 'Suspender'}
-                                          </button>
+                                          <div className="flex justify-end gap-2">
+                                              <button
+                                                  onClick={() => handleManualRenew(company.id, company.name)}
+                                                  title="Renovar Manualmente (Dinheiro)"
+                                                  className="p-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition"
+                                              >
+                                                  <DollarSign size={16} />
+                                              </button>
+                                              
+                                              <button 
+                                                  onClick={() => handleToggleStatus(company.id, company.status)}
+                                                  title={company.status === 'inactive' ? 'Ativar' : 'Suspender'}
+                                                  className={`p-1.5 rounded-lg transition ${
+                                                      company.status === 'inactive' 
+                                                      ? 'text-blue-600 bg-blue-50 hover:bg-blue-100'
+                                                      : 'text-orange-600 bg-orange-50 hover:bg-orange-100' 
+                                                  }`}
+                                              >
+                                                  <Ban size={16} />
+                                              </button>
+
+                                              <button
+                                                  onClick={() => handleDeleteCompany(company.id, company.name)}
+                                                  title="Excluir Empresa"
+                                                  className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition"
+                                              >
+                                                  <Trash2 size={16} />
+                                              </button>
+                                          </div>
                                       </td>
                                   </tr>
                               ))}

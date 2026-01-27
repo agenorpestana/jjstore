@@ -105,6 +105,22 @@ export const updateCompanyStatus = async (id: string, status: 'active' | 'inacti
     await handleResponse(response);
 };
 
+export const manualRenewCompany = async (id: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/saas/companies/${id}/renew`, {
+        method: 'POST',
+        headers: getHeaders()
+    });
+    await handleResponse(response);
+}
+
+export const deleteCompany = async (id: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/saas/companies/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+    });
+    await handleResponse(response);
+}
+
 // --- SaaS Settings (Super Admin) ---
 export const getSaasSettings = async (): Promise<SaasSettings> => {
     const response = await fetch(`${API_URL}/saas/settings`, {
