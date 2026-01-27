@@ -185,6 +185,26 @@ const getCompanyId = (req) => {
     return req.headers['x-company-id'] || null;
 }
 
+// --- CALCULATION HELPER ---
+function calculateNextDueDate(currentNextDue, trialEndsAt) {
+    const now = new Date();
+    let baseDate = now;
+
+    // Se já tem uma data de vencimento futura, usa ela como base
+    if (currentNextDue && new Date(currentNextDue) > now) {
+        baseDate = new Date(currentNextDue);
+    } 
+    // Se não tem vencimento, mas tem um trial futuro, usa o fim do trial como base
+    else if (trialEndsAt && new Date(trialEndsAt) > now) {
+        baseDate = new Date(trialEndsAt);
+    }
+    // Se tudo estiver no passado, a base continua sendo NOW
+
+    // Adiciona 30 dias
+    baseDate.setDate(baseDate.getDate() + 30);
+    return baseDate;
+}
+
 // --- API Routes (Prefix /api) ---
 
 app.get('/api/health', (req, res) => {
@@ -297,18 +317,17 @@ app.get('/api/saas/payment-success', async (req, res) => {
         const { company_id } = req.query;
         if (!company_id) return res.redirect('/');
 
-        // A renovação real é feita via WEBHOOK, mas fazemos um fallback aqui 
-        // caso o webhook atrase, apenas para UX (usuario ver liberado)
-        // OBS: Em produção critica, confiar APENAS no webhook é mais seguro.
-        const [rows] = await pool.query("SELECT next_payment_due FROM companies WHERE id = ?", [company_id]);
+        // Recupera dados atuais para calcular corretamente a soma
+        const [rows] = await pool.query("SELECT next_payment_due, trial_ends_at FROM companies WHERE id = ?", [company_id]);
         
-        let newDueDate = new Date();
-        newDueDate.setDate(newDueDate.getDate() + 30);
-        
-        await pool.query(
-            "UPDATE companies SET status = 'active', last_payment_date = NOW(), next_payment_due = ? WHERE id = ?", 
-            [newDueDate, company_id]
-        );
+        if (rows.length > 0) {
+            const newDueDate = calculateNextDueDate(rows[0].next_payment_due, rows[0].trial_ends_at);
+            
+            await pool.query(
+                "UPDATE companies SET status = 'active', last_payment_date = NOW(), next_payment_due = ? WHERE id = ?", 
+                [newDueDate, company_id]
+            );
+        }
 
         // Redirect back to app home
         res.redirect('/');
@@ -322,7 +341,6 @@ app.get('/api/saas/payment-success', async (req, res) => {
 // Processa notificações de pagamento
 const handleWebhook = async (req, res) => {
     // 1. IMPORTANTE: Responder IMEDIATAMENTE ao Mercado Pago com 200 OK.
-    // Isso evita o erro 502/Timeout no painel do MP se o processamento demorar.
     res.status(200).json({ status: 'received' });
 
     // 2. Processamento Assíncrono (Background)
@@ -354,22 +372,18 @@ const handleWebhook = async (req, res) => {
                     const companyId = payment.external_reference;
                     
                     if (companyId) {
-                         // Lógica de Renovação
-                        const [rows] = await pool.query("SELECT next_payment_due FROM companies WHERE id = ?", [companyId]);
+                         // Lógica de Renovação Corrigida (Cumulativa)
+                        const [rows] = await pool.query("SELECT next_payment_due, trial_ends_at FROM companies WHERE id = ?", [companyId]);
                         
-                        let baseDate = new Date();
-                        // Se a data de vencimento for futura, soma a partir dela. Se já venceu, soma a partir de hoje.
-                        if (rows.length > 0 && rows[0].next_payment_due && new Date(rows[0].next_payment_due) > baseDate) {
-                            baseDate = new Date(rows[0].next_payment_due);
-                        }
-                        
-                        baseDate.setDate(baseDate.getDate() + 30);
+                        if (rows.length > 0) {
+                            const newDueDate = calculateNextDueDate(rows[0].next_payment_due, rows[0].trial_ends_at);
 
-                        await pool.query(
-                            "UPDATE companies SET status = 'active', last_payment_date = NOW(), next_payment_due = ? WHERE id = ?", 
-                            [baseDate, companyId]
-                        );
-                        console.log(`Empresa ${companyId} renovada via Webhook até ${baseDate}`);
+                            await pool.query(
+                                "UPDATE companies SET status = 'active', last_payment_date = NOW(), next_payment_due = ? WHERE id = ?", 
+                                [newDueDate, companyId]
+                            );
+                            console.log(`Empresa ${companyId} renovada via Webhook até ${newDueDate}`);
+                        }
                     }
                 }
             } else {
@@ -377,7 +391,6 @@ const handleWebhook = async (req, res) => {
             }
         }
     } catch (err) {
-        // Como já respondemos 200, apenas logamos o erro para debug
         console.error("Webhook Background Error:", err);
     }
 };
@@ -460,22 +473,15 @@ app.patch('/api/saas/companies/:id/status', async (req, res) => {
 app.post('/api/saas/companies/:id/renew', async (req, res) => {
     try {
         const { id } = req.params;
-        // Pega data atual de vencimento
-        const [rows] = await pool.query("SELECT next_payment_due FROM companies WHERE id = ?", [id]);
+        // Pega data atual de vencimento e trial
+        const [rows] = await pool.query("SELECT next_payment_due, trial_ends_at FROM companies WHERE id = ?", [id]);
         if (rows.length === 0) return res.status(404).json({ error: "Empresa não encontrada" });
 
-        let baseDate = new Date();
-        // Se a data de vencimento for futura, soma a partir dela. Se já venceu, soma a partir de hoje.
-        if (rows[0].next_payment_due && new Date(rows[0].next_payment_due) > baseDate) {
-            baseDate = new Date(rows[0].next_payment_due);
-        }
-
-        // Adiciona 30 dias
-        baseDate.setDate(baseDate.getDate() + 30);
+        const newDueDate = calculateNextDueDate(rows[0].next_payment_due, rows[0].trial_ends_at);
 
         await pool.query(
             "UPDATE companies SET status = 'active', last_payment_date = NOW(), next_payment_due = ? WHERE id = ?",
-            [baseDate, id]
+            [newDueDate, id]
         );
 
         res.json({ message: 'Assinatura renovada manualmente com sucesso' });
