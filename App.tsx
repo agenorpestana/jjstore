@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Search, PackageOpen, ArrowLeft, Lock, User, LogIn, X, Download } from 'lucide-react';
+import { Search, PackageOpen, ArrowLeft, Lock, User, LogIn, X, Download, Building, Phone as PhoneIcon, UserPlus } from 'lucide-react';
 import { Order, Employee, AppSettings } from './types';
-import { getOrderById, authenticateUser, getAppSettings } from './services/mockData';
+import { getOrderById, authenticateUser, getAppSettings, registerCompany } from './services/mockData';
 import { StatusTimeline } from './components/StatusTimeline';
 import { OrderDetails } from './components/OrderDetails';
 import { SupportChat } from './components/SupportChat';
@@ -15,8 +15,20 @@ function App() {
   // Authentication State
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  
   const [loginForm, setLoginForm] = useState({ login: '', password: '' });
   const [loginError, setLoginError] = useState('');
+  
+  // Registration State
+  const [registerForm, setRegisterForm] = useState({
+      companyName: '',
+      adminName: '',
+      contact: '',
+      login: '',
+      password: ''
+  });
+  const [registerError, setRegisterError] = useState('');
 
   // PWA Install State
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -40,7 +52,6 @@ function App() {
 
   useEffect(() => {
     loadSettings();
-    // Handle PWA Install Prompt
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setInstallPrompt(e);
@@ -91,17 +102,42 @@ function App() {
           setCurrentUser(user);
           setShowLoginModal(false);
           setLoginForm({ login: '', password: '' });
+          // After login, refresh settings to show company specific branding
+          loadSettings();
       } else {
           setLoginError('Login ou senha inválidos.');
       }
   };
+
+  const handleRegister = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setRegisterError('');
+
+      if (!registerForm.companyName || !registerForm.adminName || !registerForm.login || !registerForm.password) {
+          setRegisterError("Preencha todos os campos obrigatórios.");
+          return;
+      }
+
+      try {
+          await registerCompany(registerForm);
+          alert("Empresa cadastrada com sucesso! Faça login para continuar.");
+          setShowRegisterModal(false);
+          setShowLoginModal(true);
+          setRegisterForm({ companyName: '', adminName: '', contact: '', login: '', password: '' });
+      } catch (err: any) {
+          setRegisterError(err.message || "Erro ao registrar.");
+      }
+  }
 
   // If Logged In, Render Dashboard
   if (currentUser) {
     return (
         <AdminDashboard 
             currentUser={currentUser} 
-            onLogout={() => setCurrentUser(null)}
+            onLogout={() => {
+                setCurrentUser(null);
+                window.location.reload(); // Reset state properly
+            }}
             appSettings={appSettings}
             onUpdateSettings={loadSettings}
         />
@@ -286,15 +322,121 @@ function App() {
                     >
                         <LogIn size={18} /> Entrar
                     </button>
-                    
-                    <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-500 text-center border border-gray-100">
-                        <p className="font-semibold mb-1">Dados de Teste:</p>
-                        <p>Admin: admin / 123</p>
-                        <p>Usuário: user / 123</p>
+
+                    <div className="border-t border-gray-100 pt-4 mt-2">
+                         <button 
+                            type="button"
+                            onClick={() => { setShowLoginModal(false); setShowRegisterModal(true); }}
+                            className="w-full bg-green-50 text-green-700 py-2 rounded-lg text-sm font-medium hover:bg-green-100 transition flex items-center justify-center gap-2"
+                         >
+                             <Building size={16} /> Cadastrar Empresa (SaaS)
+                         </button>
                     </div>
                 </form>
             </div>
         </div>
+      )}
+
+      {/* Register SaaS Modal */}
+      {showRegisterModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl w-full max-w-md shadow-xl p-6 relative">
+                  <button 
+                      onClick={() => setShowRegisterModal(false)} 
+                      className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+                  >
+                      <X size={20} />
+                  </button>
+                  <div className="text-center mb-6">
+                      <div className="bg-green-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 text-green-600">
+                          <Building size={24} />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-800">Criar Conta Empresarial</h3>
+                      <p className="text-sm text-gray-500">Comece a usar o Rastreaê agora mesmo.</p>
+                  </div>
+
+                  <form onSubmit={handleRegister} className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Empresa</label>
+                          <div className="relative">
+                              <Building className="absolute left-3 top-3 text-gray-400" size={18} />
+                              <input 
+                                  type="text" 
+                                  className="w-full border border-gray-300 rounded-lg p-2.5 pl-10 focus:ring-2 focus:ring-primary focus:outline-none"
+                                  placeholder="Minha Empresa Ltda"
+                                  value={registerForm.companyName}
+                                  onChange={e => setRegisterForm({...registerForm, companyName: e.target.value})}
+                              />
+                          </div>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Administrador</label>
+                          <div className="relative">
+                              <UserPlus className="absolute left-3 top-3 text-gray-400" size={18} />
+                              <input 
+                                  type="text" 
+                                  className="w-full border border-gray-300 rounded-lg p-2.5 pl-10 focus:ring-2 focus:ring-primary focus:outline-none"
+                                  placeholder="Seu Nome"
+                                  value={registerForm.adminName}
+                                  onChange={e => setRegisterForm({...registerForm, adminName: e.target.value})}
+                              />
+                          </div>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Celular / Contato</label>
+                          <div className="relative">
+                              <PhoneIcon className="absolute left-3 top-3 text-gray-400" size={18} />
+                              <input 
+                                  type="text" 
+                                  className="w-full border border-gray-300 rounded-lg p-2.5 pl-10 focus:ring-2 focus:ring-primary focus:outline-none"
+                                  placeholder="(00) 00000-0000"
+                                  value={registerForm.contact}
+                                  onChange={e => setRegisterForm({...registerForm, contact: e.target.value})}
+                              />
+                          </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Login Admin</label>
+                            <input 
+                                type="text" 
+                                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
+                                placeholder="admin.empresa"
+                                value={registerForm.login}
+                                onChange={e => setRegisterForm({...registerForm, login: e.target.value})}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+                            <input 
+                                type="password" 
+                                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
+                                placeholder="******"
+                                value={registerForm.password}
+                                onChange={e => setRegisterForm({...registerForm, password: e.target.value})}
+                            />
+                        </div>
+                      </div>
+
+                      {registerError && <p className="text-sm text-red-500 text-center">{registerError}</p>}
+
+                      <button 
+                          type="submit" 
+                          className="w-full bg-green-600 text-white py-2.5 rounded-lg font-medium hover:bg-green-700 transition shadow-sm"
+                      >
+                          Registrar Empresa
+                      </button>
+                      <button 
+                          type="button"
+                          onClick={() => { setShowRegisterModal(false); setShowLoginModal(true); }}
+                          className="w-full text-gray-500 py-2 text-sm hover:text-gray-700"
+                      >
+                          Voltar para Login
+                      </button>
+                  </form>
+              </div>
+          </div>
       )}
     </div>
   );

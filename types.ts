@@ -9,7 +9,7 @@ export enum OrderStatus {
 export interface OrderItem {
   id: string;
   name: string;
-  size: string; // Novo: Tamanho (P, M, G, 325ml, etc)
+  size: string;
   quantity: number;
   price: number;
   image: string;
@@ -25,6 +25,7 @@ export interface StatusEvent {
 
 export interface Order {
   id: string;
+  companyId: string; // Novo: Vincula pedido à empresa
   customerName: string;
   customerPhone: string;
   orderDate: string;
@@ -37,8 +38,8 @@ export interface Order {
   currentStatus: OrderStatus;
   timeline: StatusEvent[];
   shippingAddress: string;
-  pressingDate?: string; // Data de prensagem (YYYY-MM-DD do input)
-  seamstress?: string; // Nome da costureira
+  pressingDate?: string;
+  seamstress?: string;
 }
 
 export interface NewOrderInput {
@@ -55,10 +56,11 @@ export interface NewOrderInput {
   items: Omit<OrderItem, 'id' | 'image'>[];
 }
 
-export type AccessLevel = 'admin' | 'user';
+export type AccessLevel = 'admin' | 'user' | 'saas_admin'; // Novo nível SaaS
 
 export interface Employee {
   id: string;
+  companyId: string | null; // Null se for Super Admin SaaS
   name: string;
   role: string;
   contact: string;
@@ -79,5 +81,12 @@ export interface NewEmployeeInput {
 
 export interface AppSettings {
   appName: string;
-  logoUrl: string | null; // Pode ser URL ou Base64
+  logoUrl: string | null;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  plan: string;
+  createdAt: string;
 }

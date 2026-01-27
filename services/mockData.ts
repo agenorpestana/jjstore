@@ -15,6 +15,21 @@ const getBaseUrl = () => {
 const API_URL = getBaseUrl();
 console.log("Connecting to Backend API at:", API_URL);
 
+// --- State to hold current company context (set after login) ---
+let currentCompanyId: string | null = null;
+
+export const setCompanyContext = (companyId: string | null) => {
+    currentCompanyId = companyId;
+};
+
+const getHeaders = () => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (currentCompanyId) {
+        headers['x-company-id'] = currentCompanyId;
+    }
+    return headers;
+}
+
 // --- Helper for Errors ---
 const handleResponse = async (response: Response) => {
   if (!response.ok) {
@@ -26,20 +41,22 @@ const handleResponse = async (response: Response) => {
 
 // --- Settings ---
 export const getAppSettings = async (): Promise<AppSettings> => {
-    const response = await fetch(`${API_URL}/settings`);
+    const response = await fetch(`${API_URL}/settings`, {
+        headers: getHeaders()
+    });
     return handleResponse(response);
 };
 
 export const updateAppSettings = async (settings: AppSettings): Promise<void> => {
     const response = await fetch(`${API_URL}/settings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify(settings)
     });
     await handleResponse(response);
 };
 
-// --- Authentication ---
+// --- Authentication & Registration ---
 export const authenticateUser = async (login: string, pass: string): Promise<Employee | null> => {
     try {
         const response = await fetch(`${API_URL}/login`, {
@@ -51,11 +68,25 @@ export const authenticateUser = async (login: string, pass: string): Promise<Emp
             console.warn("Authentication failed with status:", response.status);
             return null;
         }
-        return await response.json();
+        const user = await response.json();
+        // Set context for future requests
+        if (user.companyId) {
+            setCompanyContext(user.companyId);
+        }
+        return user;
     } catch (e) {
         console.error("Login error / Network error.", e);
         return null;
     }
+}
+
+export const registerCompany = async (data: any): Promise<void> => {
+    const response = await fetch(`${API_URL}/register-company`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    await handleResponse(response);
 }
 
 // --- Order Functions ---
@@ -66,7 +97,9 @@ export const getOrderById = async (id: string): Promise<Order> => {
 };
 
 export const getAllOrders = async (): Promise<Order[]> => {
-    const response = await fetch(`${API_URL}/orders`);
+    const response = await fetch(`${API_URL}/orders`, {
+        headers: getHeaders()
+    });
     return handleResponse(response);
 };
 
@@ -84,6 +117,7 @@ export const createOrder = async (input: NewOrderInput): Promise<Order> => {
 
   const newOrder: Order = {
     id,
+    companyId: currentCompanyId || '', // Backend validation will catch if empty
     customerName: input.customerName,
     customerPhone: input.customerPhone,
     orderDate: formatDate(input.orderDate),
@@ -125,7 +159,7 @@ export const createOrder = async (input: NewOrderInput): Promise<Order> => {
 
   const response = await fetch(`${API_URL}/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify(newOrder)
   });
 
@@ -165,7 +199,7 @@ export const updateOrderFull = async (id: string, input: NewOrderInput): Promise
 
     const response = await fetch(`${API_URL}/orders/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify(updatedData)
     });
 
@@ -174,14 +208,17 @@ export const updateOrderFull = async (id: string, input: NewOrderInput): Promise
 };
 
 export const deleteOrder = async (id: string): Promise<void> => {
-    const response = await fetch(`${API_URL}/orders/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_URL}/orders/${id}`, { 
+        method: 'DELETE',
+        headers: getHeaders()
+    });
     await handleResponse(response);
 };
 
 export const registerPayment = async (id: string, amount: number, method: string): Promise<Order> => {
     const response = await fetch(`${API_URL}/orders/${id}/payment`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify({ amount, method })
     });
     await handleResponse(response);
@@ -234,7 +271,7 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus,
 
     const response = await fetch(`${API_URL}/orders/${orderId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify({ currentStatus: newStatus, timeline: newTimeline })
     });
 
@@ -245,7 +282,9 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus,
 // --- Employee Functions ---
 
 export const getEmployees = async (): Promise<Employee[]> => {
-    const response = await fetch(`${API_URL}/employees`);
+    const response = await fetch(`${API_URL}/employees`, {
+        headers: getHeaders()
+    });
     return handleResponse(response);
 };
 
@@ -258,13 +297,16 @@ export const createEmployee = async (input: NewEmployeeInput): Promise<Employee>
 
     const response = await fetch(`${API_URL}/employees`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify(newEmployee)
     });
     return handleResponse(response);
 };
 
 export const deleteEmployee = async (id: string): Promise<void> => {
-    const response = await fetch(`${API_URL}/employees/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_URL}/employees/${id}`, { 
+        method: 'DELETE',
+        headers: getHeaders() 
+    });
     await handleResponse(response);
 }
