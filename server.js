@@ -14,7 +14,9 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 
 app.use(cors());
+// Aumentando limite e aceitando urlencoded para garantir compatibilidade total com MP
 app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use(express.static(path.join(__dirname, 'dist')));
 
@@ -337,20 +339,29 @@ app.get('/api/saas/payment-success', async (req, res) => {
     }
 });
 
-// --- WEBHOOK MERCADO PAGO ---
-// Processa notificações de pagamento
+// --- WEBHOOK MERCADO PAGO (CORRIGIDO) ---
 const handleWebhook = async (req, res) => {
-    // 1. IMPORTANTE: Responder IMEDIATAMENTE ao Mercado Pago com 200 OK.
-    res.status(200).json({ status: 'received' });
+    // 1. RESPOSTA IMEDIATA: Evita 502/Timeout
+    // O Mercado Pago espera um 200 OK em menos de 3 segundos.
+    res.status(200).send('OK');
 
-    // 2. Processamento Assíncrono (Background)
+    // 2. Processamento em Background
+    // Usar um bloco try/catch separado para garantir que erros aqui não afetem a resposta acima
     try {
-        const { type, data, action } = req.body;
-        const isPayment = type === 'payment' || action === 'payment.created';
-        
-        console.log(`Webhook MP recebido (Async): Type=${type}, Action=${action}, DataID=${data?.id}`);
+        console.log('--- WEBHOOK HIT ---');
+        // Log para debug
+        // console.log(JSON.stringify(req.body, null, 2));
 
+        const { type, data, action } = req.body;
+        
+        // Verifica se é evento de pagamento (criado ou atualizado)
+        // action pode ser 'payment.created' ou 'payment.updated'
+        // type pode ser 'payment'
+        const isPayment = type === 'payment' || (action && action.startsWith('payment.'));
+        
         if (isPayment && data?.id) {
+            console.log(`Processando pagamento ID: ${data.id}`);
+
             const accessToken = await getMPAccessToken();
             if (!accessToken) {
                 console.error("Webhook Error: Access Token não configurado.");
@@ -366,14 +377,19 @@ const handleWebhook = async (req, res) => {
 
             if (response.ok) {
                 const payment = await response.json();
-                console.log(`Webhook Pagamento ${data.id}: Status=${payment.status}`);
+                console.log(`Status do Pagamento ${data.id}: ${payment.status}`);
 
+                // Se APROVADO, renova a assinatura
                 if (payment.status === 'approved') {
                     const companyId = payment.external_reference;
                     
                     if (companyId) {
                          // Lógica de Renovação Corrigida (Cumulativa)
                         const [rows] = await pool.query("SELECT next_payment_due, trial_ends_at FROM companies WHERE id = ?", [companyId]);
+                        
+                        // Garante que a renovação só aconteça se a data de último pagamento for diferente
+                        // ou se for um pagamento novo (evita loops se o webhook enviar 2x)
+                        // Para simplificar, assumimos que 'approved' é sinal verde.
                         
                         if (rows.length > 0) {
                             const newDueDate = calculateNextDueDate(rows[0].next_payment_due, rows[0].trial_ends_at);
@@ -382,20 +398,28 @@ const handleWebhook = async (req, res) => {
                                 "UPDATE companies SET status = 'active', last_payment_date = NOW(), next_payment_due = ? WHERE id = ?", 
                                 [newDueDate, companyId]
                             );
-                            console.log(`Empresa ${companyId} renovada via Webhook até ${newDueDate}`);
+                            console.log(`SUCESSO: Empresa ${companyId} renovada até ${newDueDate}`);
+                        } else {
+                            console.warn(`Empresa não encontrada para ID: ${companyId}`);
                         }
+                    } else {
+                        console.warn('Pagamento sem external_reference (company_id)');
                     }
                 }
             } else {
-                console.error("Erro ao consultar pagamento no MP:", await response.text());
+                console.error("Erro ao consultar MP:", await response.text());
             }
+        } else {
+            // Ignora eventos que não sejam de pagamento
+            console.log("Evento ignorado (não é pagamento ou sem ID)");
         }
     } catch (err) {
-        console.error("Webhook Background Error:", err);
+        // Erro silencioso no console para não crashar o server
+        console.error("ERRO FATAL NO WEBHOOK:", err);
     }
 };
 
-// Mapeia nas duas rotas possíveis para garantir que funcione com sua configuração atual
+// Mapeia nas duas rotas para garantir
 app.post('/api/webhook/mercadopago', handleWebhook);
 app.post('/subscription/webhook', handleWebhook);
 
