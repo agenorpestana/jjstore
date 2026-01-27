@@ -230,7 +230,7 @@ app.post('/api/saas/checkout/:companyId', async (req, res) => {
         const { companyId } = req.params;
         const accessToken = await getMPAccessToken();
         
-        if (!accessToken) return res.status(500).json({ error: "Configuração de pagamento não encontrada no sistema." });
+        if (!accessToken) return res.status(500).json({ error: "Configuração de pagamento não encontrada. Contate o suporte." });
 
         // Get Company Plan Info
         const [compRows] = await pool.query("SELECT name, plan FROM companies WHERE id = ?", [companyId]);
@@ -241,6 +241,30 @@ app.post('/api/saas/checkout/:companyId', async (req, res) => {
         const [planRows] = await pool.query("SELECT price FROM plans WHERE name = ?", [company.plan]);
         const price = planRows.length > 0 ? parseFloat(planRows[0].price) : 49.90;
 
+        // Construção segura da URL Base
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+        const host = req.get('host');
+        // Fallback para origin se host não estiver disponível ou para evitar problemas de CORS/Redirecionamento
+        const baseUrl = req.headers.origin || `${protocol}://${host}`;
+
+        const preferenceData = {
+            items: [
+                {
+                    title: `Assinatura Rastreaê - Plano ${company.plan}`,
+                    quantity: 1,
+                    currency_id: 'BRL',
+                    unit_price: Number(price)
+                }
+            ],
+            external_reference: companyId,
+            back_urls: {
+                success: `${baseUrl}/api/saas/payment-success?company_id=${companyId}`,
+                failure: `${baseUrl}/`,
+                pending: `${baseUrl}/`
+            },
+            auto_return: "approved"
+        };
+
         // Call Mercado Pago API manually to avoid SDK dependency issues in this setup
         const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
             method: 'POST',
@@ -248,23 +272,7 @@ app.post('/api/saas/checkout/:companyId', async (req, res) => {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${accessToken}`
             },
-            body: JSON.stringify({
-                items: [
-                    {
-                        title: `Assinatura Rastreaê - Plano ${company.plan}`,
-                        quantity: 1,
-                        currency_id: 'BRL',
-                        unit_price: price
-                    }
-                ],
-                external_reference: companyId,
-                back_urls: {
-                    success: `${req.protocol}://${req.get('host')}/api/saas/payment-success?company_id=${companyId}`,
-                    failure: `${req.headers.origin}/`,
-                    pending: `${req.headers.origin}/`
-                },
-                auto_return: "approved"
-            })
+            body: JSON.stringify(preferenceData)
         });
 
         const data = await response.json();
@@ -272,12 +280,13 @@ app.post('/api/saas/checkout/:companyId', async (req, res) => {
         if (data.init_point) {
             res.json({ checkoutUrl: data.init_point });
         } else {
-            console.error("MP Error:", data);
-            res.status(500).json({ error: "Erro ao criar pagamento." });
+            console.error("MP Error Data:", data);
+            const msg = data.message || "Erro desconhecido do Mercado Pago";
+            res.status(500).json({ error: `Erro MP: ${msg}`, details: data });
         }
 
     } catch (err) {
-        console.error(err);
+        console.error("Checkout Exception:", err);
         res.status(500).json({ error: err.message });
     }
 });
