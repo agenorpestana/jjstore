@@ -319,23 +319,27 @@ app.get('/api/saas/payment-success', async (req, res) => {
 });
 
 // --- WEBHOOK MERCADO PAGO ---
-// Processa notificações de pagamento em segundo plano
+// Processa notificações de pagamento
 const handleWebhook = async (req, res) => {
+    // 1. IMPORTANTE: Responder IMEDIATAMENTE ao Mercado Pago com 200 OK.
+    // Isso evita o erro 502/Timeout no painel do MP se o processamento demorar.
+    res.status(200).json({ status: 'received' });
+
+    // 2. Processamento Assíncrono (Background)
     try {
         const { type, data, action } = req.body;
-        // Mercado Pago pode enviar 'type' ou 'action' dependendo da versão do webhook
         const isPayment = type === 'payment' || action === 'payment.created';
         
-        console.log(`Webhook MP recebido: Type=${type}, Action=${action}, DataID=${data?.id}`);
+        console.log(`Webhook MP recebido (Async): Type=${type}, Action=${action}, DataID=${data?.id}`);
 
         if (isPayment && data?.id) {
             const accessToken = await getMPAccessToken();
             if (!accessToken) {
                 console.error("Webhook Error: Access Token não configurado.");
-                return res.status(500).send("Server Config Error");
+                return;
             }
 
-            // Consultar o pagamento na API do MP para garantir segurança e pegar status atual
+            // Consultar o pagamento na API do MP
             const response = await fetch(`https://api.mercadopago.com/v1/payments/${data.id}`, {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`
@@ -353,8 +357,8 @@ const handleWebhook = async (req, res) => {
                          // Lógica de Renovação
                         const [rows] = await pool.query("SELECT next_payment_due FROM companies WHERE id = ?", [companyId]);
                         
-                        // Define data base: se venceu, é HOJE + 30. Se não venceu, é DATA_ATUAL + 30
                         let baseDate = new Date();
+                        // Se a data de vencimento for futura, soma a partir dela. Se já venceu, soma a partir de hoje.
                         if (rows.length > 0 && rows[0].next_payment_due && new Date(rows[0].next_payment_due) > baseDate) {
                             baseDate = new Date(rows[0].next_payment_due);
                         }
@@ -372,12 +376,9 @@ const handleWebhook = async (req, res) => {
                 console.error("Erro ao consultar pagamento no MP:", await response.text());
             }
         }
-
-        res.status(200).send("OK");
     } catch (err) {
-        console.error("Webhook Exception:", err);
-        // Sempre responder 200/201 para o MP não ficar tentando reenviar infinitamente em caso de erro de lógica interna
-        res.status(200).send("Error processed");
+        // Como já respondemos 200, apenas logamos o erro para debug
+        console.error("Webhook Background Error:", err);
     }
 };
 
