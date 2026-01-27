@@ -70,6 +70,9 @@ export interface Employee {
   accessLevel: AccessLevel;
   // Auxiliar para frontend
   companyStatus?: 'active' | 'inactive' | 'trial' | 'pending_payment';
+  plan?: string;
+  trial_ends_at?: string;
+  next_payment_due?: string;
 }
 
 export interface NewEmployeeInput {

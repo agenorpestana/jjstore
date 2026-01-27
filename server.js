@@ -721,9 +721,9 @@ app.delete('/api/employees/:id', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { login, password } = req.body;
-        // Busca usuário e dados da empresa
+        // Busca usuário e dados da empresa. AQUI FOI ADICIONADO 'c.plan'
         const [rows] = await pool.query(`
-            SELECT e.*, c.name as companyName, c.status as companyStatus, c.trial_ends_at, c.next_payment_due
+            SELECT e.*, c.name as companyName, c.status as companyStatus, c.trial_ends_at, c.next_payment_due, c.plan
             FROM employees e 
             LEFT JOIN companies c ON e.company_id = c.id
             WHERE e.login = ? AND e.password = ?
@@ -759,7 +759,10 @@ app.post('/api/login', async (req, res) => {
                 ...user,
                 companyId: user.company_id,
                 companyName: user.companyName,
-                companyStatus: user.companyStatus // Frontend needs this to show Pay Wall
+                companyStatus: user.companyStatus, // Frontend needs this to show Pay Wall
+                plan: user.plan,
+                trial_ends_at: user.trial_ends_at,
+                next_payment_due: user.next_payment_due
             });
         } else {
             res.status(401).json({ error: 'Invalid credentials' });

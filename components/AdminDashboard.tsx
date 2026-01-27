@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save } from 'lucide-react';
+import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle } from 'lucide-react';
 import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings } from '../types';
-import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings } from '../services/mockData';
+import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession } from '../services/mockData';
 
 interface AdminDashboardProps {
   currentUser: Employee;
@@ -11,7 +11,7 @@ interface AdminDashboardProps {
   onUpdateSettings: () => void;
 }
 
-type Tab = 'orders' | 'employees' | 'settings';
+type Tab = 'orders' | 'employees' | 'settings' | 'subscription';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onLogout, appSettings, onUpdateSettings }) => {
   const [activeTab, setActiveTab] = useState<Tab>('orders');
@@ -21,6 +21,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
   // Check Permissions
   const isAdmin = currentUser.accessLevel === 'admin';
+
+  // Subscription Warning Logic
+  const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+      if (isAdmin && (currentUser.next_payment_due || currentUser.trial_ends_at)) {
+          const dueDateStr = currentUser.status === 'trial' ? currentUser.trial_ends_at : currentUser.next_payment_due;
+          if (dueDateStr) {
+              const dueDate = new Date(dueDateStr);
+              const now = new Date();
+              const diffTime = dueDate.getTime() - now.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              setDaysRemaining(diffDays);
+          }
+      }
+  }, [currentUser, isAdmin]);
+
 
   // Search & Pagination State
   const [searchTerm, setSearchTerm] = useState('');
@@ -99,6 +116,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           refreshOrders();
       }
   };
+
+  // --- Subscription Payment Logic ---
+  const handlePaySubscription = async () => {
+      if (!currentUser.companyId) return;
+      try {
+          const url = await createCheckoutSession(currentUser.companyId);
+          window.location.href = url;
+      } catch (e: any) {
+          alert('Erro ao gerar pagamento: ' + e.message);
+      }
+  }
 
   // --- Order Form Logic (New & Edit) ---
   const [orderForm, setOrderForm] = useState<NewOrderInput>({
@@ -527,6 +555,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           const [y, m, d] = dateStr.split('-');
           return `${d}/${m}/${y}`;
       }
+      // If full ISO string
+      try {
+          const date = new Date(dateStr);
+          if (!isNaN(date.getTime())) {
+              return date.toLocaleDateString('pt-BR');
+          }
+      } catch (e) {
+          return dateStr;
+      }
       return dateStr;
   };
 
@@ -557,11 +594,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         </div>
       </div>
 
+      {/* Subscription Alert Banner */}
+      {daysRemaining !== null && daysRemaining <= 3 && daysRemaining >= 0 && (
+          <div className="bg-orange-50 border-b border-orange-100 p-3">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-orange-800 text-sm font-medium">
+                      <AlertTriangle size={18} />
+                      Atenção: Sua assinatura vence em {daysRemaining} dia(s). Evite o bloqueio do sistema.
+                  </div>
+                  <button 
+                    onClick={() => setActiveTab('subscription')} 
+                    className="bg-orange-600 hover:bg-orange-700 text-white text-xs px-3 py-1.5 rounded-md transition"
+                  >
+                      Renovar Agora
+                  </button>
+              </div>
+          </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Tabs & Actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-            <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm flex-wrap">
                 <button 
                     onClick={() => setActiveTab('orders')}
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'orders' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
@@ -582,6 +637,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'settings' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
                         <Settings size={16} /> Configurações
+                    </button>
+                )}
+                {isAdmin && (
+                     <button 
+                        onClick={() => setActiveTab('subscription')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'subscription' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        <CreditCard size={16} /> Minha Assinatura
                     </button>
                 )}
             </div>
@@ -850,6 +913,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                             >
                                 <Save size={18} /> Salvar Alterações
                             </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* --- SUBSCRIPTION TAB (ADMIN ONLY) --- */}
+        {activeTab === 'subscription' && isAdmin && (
+            <div className="max-w-3xl mx-auto">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white">
+                        <div className="flex justify-between items-start">
+                             <div>
+                                <h2 className="text-2xl font-bold mb-1">Minha Assinatura</h2>
+                                <p className="text-blue-100">Gerencie os detalhes do seu plano Rastreaê.</p>
+                             </div>
+                             <div className="bg-white/20 backdrop-blur-sm p-2 rounded-lg">
+                                 <CreditCard size={32} />
+                             </div>
+                        </div>
+                    </div>
+                    
+                    <div className="p-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Plano Atual</label>
+                                    <div className="text-3xl font-bold text-gray-800 mt-1">{currentUser.plan || 'Plano Básico'}</div>
+                                    <span className={`inline-flex items-center gap-1 mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                        ${currentUser.companyStatus === 'active' ? 'bg-green-100 text-green-700' : 
+                                          currentUser.companyStatus === 'trial' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                        {currentUser.companyStatus === 'active' && 'Assinatura Ativa'}
+                                        {currentUser.companyStatus === 'trial' && 'Período de Teste'}
+                                        {currentUser.companyStatus === 'pending_payment' && 'Pagamento Pendente'}
+                                        {currentUser.companyStatus === 'inactive' && 'Suspenso'}
+                                    </span>
+                                </div>
+                                
+                                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="bg-blue-100 p-2 rounded-full text-blue-600">
+                                            <Calendar size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-900">Próximo Vencimento</p>
+                                            <p className="text-xs text-gray-500">Mantenha em dia para evitar bloqueios.</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-xl font-bold text-gray-800 pl-11">
+                                        {currentUser.companyStatus === 'trial' 
+                                            ? formatDatePTBR(currentUser.trial_ends_at) 
+                                            : formatDatePTBR(currentUser.next_payment_due)
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col justify-center items-center bg-gray-50 rounded-xl border border-gray-200 p-6 text-center">
+                                <h3 className="text-lg font-semibold text-gray-800 mb-2">Precisa renovar?</h3>
+                                <p className="text-sm text-gray-500 mb-6">Realize o pagamento de forma segura via Mercado Pago e libere o acesso instantaneamente.</p>
+                                <button 
+                                    onClick={handlePaySubscription}
+                                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-md transition transform hover:-translate-y-1 flex items-center justify-center gap-2"
+                                >
+                                    <CreditCard size={20} />
+                                    Pagar Fatura
+                                </button>
+                                <p className="text-xs text-gray-400 mt-4 flex items-center gap-1">
+                                    <Lock size={12} /> Pagamento seguro e criptografado
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
