@@ -551,18 +551,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
   const formatDatePTBR = (dateStr?: string) => {
       if (!dateStr) return '-';
-      if (dateStr.includes('-')) {
-          const [y, m, d] = dateStr.split('-');
-          return `${d}/${m}/${y}`;
-      }
-      // If full ISO string
+      
       try {
           const date = new Date(dateStr);
+          // Verifica se é uma data válida e se o parsing funcionou
           if (!isNaN(date.getTime())) {
-              return date.toLocaleDateString('pt-BR');
+              return date.toLocaleString('pt-BR', { 
+                  day: '2-digit', 
+                  month: '2-digit', 
+                  year: 'numeric', 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+              });
           }
       } catch (e) {
-          return dateStr;
+          console.error("Erro ao formatar data:", e);
+      }
+
+      // Fallback para string simples YYYY-MM-DD
+      if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [y, m, d] = dateStr.split('-');
+          return `${d}/${m}/${y}`;
       }
       return dateStr;
   };
