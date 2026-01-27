@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { Search, PackageOpen, ArrowLeft, Lock, User, LogIn, X, Download, Building, Phone as PhoneIcon, UserPlus } from 'lucide-react';
-import { Order, Employee, AppSettings } from './types';
-import { getOrderById, authenticateUser, getAppSettings, registerCompany } from './services/mockData';
+import { Search, PackageOpen, ArrowLeft, Lock, User, LogIn, X, Download, Building, Phone as PhoneIcon, UserPlus, CreditCard } from 'lucide-react';
+import { Order, Employee, AppSettings, Plan } from './types';
+import { getOrderById, authenticateUser, getAppSettings, registerCompany, getPlans } from './services/mockData';
 import { StatusTimeline } from './components/StatusTimeline';
 import { OrderDetails } from './components/OrderDetails';
 import { SupportChat } from './components/SupportChat';
 import { AdminDashboard } from './components/AdminDashboard';
+import { SuperAdminDashboard } from './components/SuperAdminDashboard';
 
 function App() {
   // Global Settings State
@@ -26,8 +27,10 @@ function App() {
       adminName: '',
       contact: '',
       login: '',
-      password: ''
+      password: '',
+      plan: ''
   });
+  const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
   const [registerError, setRegisterError] = useState('');
 
   // PWA Install State
@@ -49,6 +52,18 @@ function App() {
         console.error("Failed to load settings", e);
     }
   };
+
+  const loadPlans = async () => {
+      try {
+          const plans = await getPlans();
+          setAvailablePlans(plans);
+          if (plans.length > 0) {
+              setRegisterForm(prev => ({ ...prev, plan: plans[0].name }));
+          }
+      } catch (e) {
+          console.error("Failed to load plans", e);
+      }
+  }
 
   useEffect(() => {
     loadSettings();
@@ -97,15 +112,16 @@ function App() {
       e.preventDefault();
       setLoginError('');
       
-      const user = await authenticateUser(loginForm.login, loginForm.password);
-      if (user) {
-          setCurrentUser(user);
-          setShowLoginModal(false);
-          setLoginForm({ login: '', password: '' });
-          // After login, refresh settings to show company specific branding
-          loadSettings();
-      } else {
-          setLoginError('Login ou senha inválidos.');
+      try {
+          const user = await authenticateUser(loginForm.login, loginForm.password);
+          if (user) {
+              setCurrentUser(user);
+              setShowLoginModal(false);
+              setLoginForm({ login: '', password: '' });
+              loadSettings();
+          }
+      } catch (err: any) {
+          setLoginError(err.message || 'Login ou senha inválidos.');
       }
   };
 
@@ -113,7 +129,7 @@ function App() {
       e.preventDefault();
       setRegisterError('');
 
-      if (!registerForm.companyName || !registerForm.adminName || !registerForm.login || !registerForm.password) {
+      if (!registerForm.companyName || !registerForm.adminName || !registerForm.login || !registerForm.password || !registerForm.plan) {
           setRegisterError("Preencha todos os campos obrigatórios.");
           return;
       }
@@ -123,14 +139,26 @@ function App() {
           alert("Empresa cadastrada com sucesso! Faça login para continuar.");
           setShowRegisterModal(false);
           setShowLoginModal(true);
-          setRegisterForm({ companyName: '', adminName: '', contact: '', login: '', password: '' });
+          setRegisterForm({ companyName: '', adminName: '', contact: '', login: '', password: '', plan: '' });
       } catch (err: any) {
           setRegisterError(err.message || "Erro ao registrar.");
       }
   }
 
-  // If Logged In, Render Dashboard
+  // If Logged In, Render Dashboard based on role
   if (currentUser) {
+    if (currentUser.accessLevel === 'saas_admin') {
+        return (
+            <SuperAdminDashboard 
+                currentUser={currentUser}
+                onLogout={() => {
+                    setCurrentUser(null);
+                    window.location.reload();
+                }}
+            />
+        )
+    }
+
     return (
         <AdminDashboard 
             currentUser={currentUser} 
@@ -326,7 +354,11 @@ function App() {
                     <div className="border-t border-gray-100 pt-4 mt-2">
                          <button 
                             type="button"
-                            onClick={() => { setShowLoginModal(false); setShowRegisterModal(true); }}
+                            onClick={() => { 
+                                setShowLoginModal(false); 
+                                setShowRegisterModal(true); 
+                                loadPlans(); // Fetch plans when opening register
+                            }}
                             className="w-full bg-green-50 text-green-700 py-2 rounded-lg text-sm font-medium hover:bg-green-100 transition flex items-center justify-center gap-2"
                          >
                              <Building size={16} /> Cadastrar Empresa (SaaS)
@@ -393,6 +425,25 @@ function App() {
                                   value={registerForm.contact}
                                   onChange={e => setRegisterForm({...registerForm, contact: e.target.value})}
                               />
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Escolha seu Plano</label>
+                          <div className="relative">
+                              <CreditCard className="absolute left-3 top-3 text-gray-400" size={18} />
+                              <select 
+                                  className="w-full border border-gray-300 rounded-lg p-2.5 pl-10 bg-white focus:ring-2 focus:ring-primary focus:outline-none appearance-none"
+                                  value={registerForm.plan}
+                                  onChange={e => setRegisterForm({...registerForm, plan: e.target.value})}
+                              >
+                                  {availablePlans.length === 0 && <option value="">Carregando planos...</option>}
+                                  {availablePlans.map(plan => (
+                                      <option key={plan.id} value={plan.name}>
+                                          {plan.name} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plan.price)}/mês
+                                      </option>
+                                  ))}
+                              </select>
                           </div>
                       </div>
                       

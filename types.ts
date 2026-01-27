@@ -25,7 +25,7 @@ export interface StatusEvent {
 
 export interface Order {
   id: string;
-  companyId: string; // Novo: Vincula pedido à empresa
+  companyId: string;
   customerName: string;
   customerPhone: string;
   orderDate: string;
@@ -56,11 +56,11 @@ export interface NewOrderInput {
   items: Omit<OrderItem, 'id' | 'image'>[];
 }
 
-export type AccessLevel = 'admin' | 'user' | 'saas_admin'; // Novo nível SaaS
+export type AccessLevel = 'admin' | 'user' | 'saas_admin';
 
 export interface Employee {
   id: string;
-  companyId: string | null; // Null se for Super Admin SaaS
+  companyId: string | null;
   name: string;
   role: string;
   contact: string;
@@ -84,9 +84,22 @@ export interface AppSettings {
   logoUrl: string | null;
 }
 
+export interface Plan {
+  id: number;
+  name: string;
+  price: number;
+  description: string;
+  features: string; // JSON string ou lista separada por virgula
+}
+
 export interface Company {
   id: string;
   name: string;
   plan: string;
-  createdAt: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+  // Campos auxiliares vindos do join com employees (admin)
+  adminName?: string;
+  contact?: string;
+  login?: string;
 }

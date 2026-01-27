@@ -1,5 +1,5 @@
 
-import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings } from '../types';
+import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, Plan, Company } from '../types';
 
 // Detecta se estamos rodando localmente ou em produção
 const getBaseUrl = () => {
@@ -56,6 +56,55 @@ export const updateAppSettings = async (settings: AppSettings): Promise<void> =>
     await handleResponse(response);
 };
 
+// --- Plans (SaaS) ---
+export const getPlans = async (): Promise<Plan[]> => {
+    const response = await fetch(`${API_URL}/plans`);
+    return handleResponse(response);
+};
+
+export const createPlan = async (plan: Omit<Plan, 'id'>): Promise<void> => {
+    const response = await fetch(`${API_URL}/plans`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(plan)
+    });
+    await handleResponse(response);
+};
+
+export const updatePlan = async (id: number, plan: Omit<Plan, 'id'>): Promise<void> => {
+    const response = await fetch(`${API_URL}/plans/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(plan)
+    });
+    await handleResponse(response);
+};
+
+export const deletePlan = async (id: number): Promise<void> => {
+    const response = await fetch(`${API_URL}/plans/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+    });
+    await handleResponse(response);
+};
+
+// --- Companies (SaaS) ---
+export const getCompanies = async (): Promise<Company[]> => {
+    const response = await fetch(`${API_URL}/saas/companies`, {
+        headers: getHeaders()
+    });
+    return handleResponse(response);
+};
+
+export const updateCompanyStatus = async (id: string, status: 'active' | 'inactive'): Promise<void> => {
+    const response = await fetch(`${API_URL}/saas/companies/${id}/status`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ status })
+    });
+    await handleResponse(response);
+};
+
 // --- Authentication & Registration ---
 export const authenticateUser = async (login: string, pass: string): Promise<Employee | null> => {
     try {
@@ -65,18 +114,20 @@ export const authenticateUser = async (login: string, pass: string): Promise<Emp
             body: JSON.stringify({ login, password: pass })
         });
         if (!response.ok) {
-            console.warn("Authentication failed with status:", response.status);
-            return null;
+            const err = await response.json();
+            throw new Error(err.error || "Authentication failed");
         }
         const user = await response.json();
         // Set context for future requests
         if (user.companyId) {
             setCompanyContext(user.companyId);
+        } else {
+            setCompanyContext('null'); // for super admin
         }
         return user;
-    } catch (e) {
-        console.error("Login error / Network error.", e);
-        return null;
+    } catch (e: any) {
+        console.error("Login error:", e.message);
+        throw e;
     }
 }
 

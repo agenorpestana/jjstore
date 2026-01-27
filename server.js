@@ -34,10 +34,19 @@ async function initDB() {
     pool = mysql.createPool(dbConfig);
 
     const createTablesQuery = `
+      CREATE TABLE IF NOT EXISTS plans (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(50),
+        price DECIMAL(10, 2),
+        description TEXT,
+        features TEXT
+      );
+
       CREATE TABLE IF NOT EXISTS companies (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100),
         plan VARCHAR(50),
+        status VARCHAR(20) DEFAULT 'active',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -111,31 +120,40 @@ async function initDB() {
 
     await pool.query(createTablesQuery);
 
-    // --- MIGRATION CHECK (For existing installations) ---
-    // Adiciona company_id se não existir para suportar migração de single-tenant
+    // --- MIGRATION CHECK ---
     const migrationQueries = [
        "ALTER TABLE orders ADD COLUMN pressingDate VARCHAR(20)",
        "ALTER TABLE orders ADD COLUMN seamstress VARCHAR(100)",
        "ALTER TABLE order_items ADD COLUMN size VARCHAR(20)",
-       // SaaS Migrations
        "ALTER TABLE orders ADD COLUMN company_id VARCHAR(50)",
        "ALTER TABLE employees ADD COLUMN company_id VARCHAR(50)",
        "ALTER TABLE app_settings ADD COLUMN company_id VARCHAR(50)",
-       // Drop primary key on app_settings to allow composite key if needed (complex migration omitted for brevity, assuming fresh or simple update)
+       // New SaaS migrations
+       "ALTER TABLE companies ADD COLUMN status VARCHAR(20) DEFAULT 'active'",
+       "ALTER TABLE companies ADD COLUMN plan VARCHAR(50)" // Ensure plan exists
     ];
 
     for (const query of migrationQueries) {
         try {
             await pool.query(query);
         } catch (e) {
-            // Ignora erros de coluna duplicada
+            // Ignora erros
         }
+    }
+
+    // Seed Plans if empty
+    const [plans] = await pool.query('SELECT * FROM plans');
+    if (plans.length === 0) {
+        await pool.query(`INSERT INTO plans (name, price, description, features) VALUES 
+            ('Básico', 49.90, 'Para pequenas empresas', 'Até 50 pedidos/mês, 1 Usuário'),
+            ('Pro', 99.90, 'Para empresas em crescimento', 'Pedidos Ilimitados, 5 Usuários, IA Inclusa'),
+            ('Enterprise', 199.90, 'Para grandes operações', 'Tudo ilimitado, Suporte Prioritário')
+        `);
     }
 
     // --- SAAS SUPER ADMIN (suporte / 200616) ---
     const [saasRows] = await pool.query('SELECT * FROM employees WHERE login = "suporte"');
     if (saasRows.length === 0) {
-      // Cria um usuário sem company_id (Global Admin)
       await pool.query(`
         INSERT INTO employees (id, company_id, name, role, contact, admittedDate, login, password, accessLevel)
         VALUES ('SAAS_ADMIN', NULL, 'Suporte SaaS', 'Super Admin', 'suporte@rastreae.com', '01/01/2024', 'suporte', '200616', 'saas_admin')
@@ -153,7 +171,6 @@ initDB();
 
 // --- MIDDLEWARE HELPERS ---
 const getCompanyId = (req) => {
-    // Retorna o ID da empresa vindo do Header (enviado pelo frontend logado)
     return req.headers['x-company-id'] || null;
 }
 
@@ -163,22 +180,88 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', port: PORT });
 });
 
+// --- PLANS ROUTES (Public GET, Admin CRUD) ---
+app.get('/api/plans', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM plans');
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/plans', async (req, res) => {
+    try {
+        const { name, price, description, features } = req.body;
+        await pool.query('INSERT INTO plans (name, price, description, features) VALUES (?, ?, ?, ?)', [name, price, description, features]);
+        res.status(201).json({ message: 'Plano criado' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/plans/:id', async (req, res) => {
+    try {
+        const { name, price, description, features } = req.body;
+        await pool.query('UPDATE plans SET name=?, price=?, description=?, features=? WHERE id=?', [name, price, description, features, req.params.id]);
+        res.json({ message: 'Plano atualizado' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/plans/:id', async (req, res) => {
+    try {
+        await pool.query('DELETE FROM plans WHERE id=?', [req.params.id]);
+        res.json({ message: 'Plano removido' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- SAAS ADMIN: COMPANIES MANAGEMENT ---
+app.get('/api/saas/companies', async (req, res) => {
+    try {
+        // Query to get company info + admin contact info
+        const query = `
+            SELECT c.*, e.name as adminName, e.contact, e.login 
+            FROM companies c 
+            LEFT JOIN employees e ON c.id = e.company_id AND e.accessLevel = 'admin'
+            GROUP BY c.id
+        `;
+        const [rows] = await pool.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.patch('/api/saas/companies/:id/status', async (req, res) => {
+    try {
+        const { status } = req.body; // 'active' or 'inactive'
+        await pool.query('UPDATE companies SET status = ? WHERE id = ?', [status, req.params.id]);
+        res.json({ message: 'Status updated' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 // --- SAAS REGISTRATION ---
 app.post('/api/register-company', async (req, res) => {
     if (!pool) return res.status(500).json({error: "DB Error"});
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
-        const { companyName, adminName, login, password, contact } = req.body;
+        const { companyName, adminName, login, password, contact, plan } = req.body;
 
-        // 1. Create Company
         const companyId = `COMP-${Date.now()}`;
+        // Default to 'active' on creation
         await conn.query(
-            'INSERT INTO companies (id, name, plan) VALUES (?, ?, ?)',
-            [companyId, companyName, 'basic']
+            'INSERT INTO companies (id, name, plan, status) VALUES (?, ?, ?, ?)',
+            [companyId, companyName, plan || 'Básico', 'active']
         );
 
-        // 2. Create Admin Employee for Company
         const empId = `EMP-${Date.now()}`;
         await conn.query(
             `INSERT INTO employees (id, company_id, name, role, contact, admittedDate, login, password, accessLevel)
@@ -186,7 +269,6 @@ app.post('/api/register-company', async (req, res) => {
             [empId, companyId, adminName, 'Administrador', contact, new Date().toLocaleDateString('pt-BR'), login, password, 'admin']
         );
 
-        // 3. Create Default Settings for Company
         await conn.query('INSERT INTO app_settings (setting_key, setting_value, company_id) VALUES (?, ?, ?)', ['appName', companyName, companyId]);
         await conn.query('INSERT INTO app_settings (setting_key, setting_value, company_id) VALUES (?, ?, ?)', ['logoUrl', '', companyId]);
 
@@ -208,13 +290,10 @@ app.get('/api/settings', async (req, res) => {
         let query = 'SELECT * FROM app_settings';
         let params = [];
 
-        // Se não tiver companyId (tela de login ou pública), tenta pegar genérico ou precisa de lógica extra.
-        // Para simplificar: Retorna configurações padrão se não logado, ou do usuário se logado.
         if (companyId && companyId !== 'null') {
             query += ' WHERE company_id = ?';
             params.push(companyId);
         } else {
-            // Fallback: Retorna Rastreaê padrão
             return res.json({ appName: 'Rastreaê', logoUrl: '' });
         }
 
@@ -238,7 +317,6 @@ app.post('/api/settings', async (req, res) => {
 
         const { appName, logoUrl } = req.body;
         
-        // Upsert logic for specific company
         await pool.query('INSERT INTO app_settings (setting_key, setting_value, company_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = ?', ['appName', appName, companyId, appName]);
         await pool.query('INSERT INTO app_settings (setting_key, setting_value, company_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = ?', ['logoUrl', logoUrl, companyId, logoUrl]);
         
@@ -253,17 +331,11 @@ app.post('/api/settings', async (req, res) => {
 app.get('/api/orders', async (req, res) => {
   try {
     const companyId = getCompanyId(req);
-    // Se for SAAS_ADMIN, vê tudo? Por enquanto vamos restringir:
-    // Se não tem companyId (public view), não deve listar ALL orders.
-    // Esta rota é usada pelo Dashboard Admin.
-    
     if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
     let query = 'SELECT * FROM orders';
     let params = [];
 
-    // Se tiver companyId, filtra. Se for SaaS admin (sem companyId no token mas logado), talvez ver tudo?
-    // Vamos assumir que o frontend manda o companyId do user logado.
     if (companyId !== 'null') {
         query += ' WHERE company_id = ?';
         params.push(companyId);
@@ -271,7 +343,6 @@ app.get('/api/orders', async (req, res) => {
 
     const [orders] = await pool.query(query, params);
     
-    // Otimização: Em produção, evitar N+1 queries. Aqui mantemos estrutura existente.
     const fullOrders = await Promise.all(orders.map(async (order) => {
       const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
       const [timeline] = await pool.query('SELECT * FROM order_timeline WHERE order_id = ?', [order.id]);
@@ -296,14 +367,18 @@ app.get('/api/orders', async (req, res) => {
 // Public OR Private route
 app.get('/api/orders/:id', async (req, res) => {
   try {
-    // Busca o pedido independente da empresa (Cliente final rastreando)
     const [rows] = await pool.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Order not found' });
 
     const order = rows[0];
 
-    // Se o usuário do admin estiver logado e tentando ver um pedido de OUTRA empresa:
-    // (Omitido para simplificação, assumindo que ID aleatório é "segurança" suficiente por ora)
+    // Check if company is active for public view
+    if (order.company_id) {
+        const [compRows] = await pool.query('SELECT status FROM companies WHERE id = ?', [order.company_id]);
+        if (compRows.length > 0 && compRows[0].status === 'inactive') {
+            return res.status(403).json({ error: 'A empresa responsável por este pedido está temporariamente suspensa.' });
+        }
+    }
 
     const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
     const [timeline] = await pool.query('SELECT * FROM order_timeline WHERE order_id = ?', [order.id]);
@@ -367,7 +442,6 @@ app.post('/api/orders', async (req, res) => {
   }
 });
 
-// Updates and Deletes should conceptually check company_id too for security
 app.put('/api/orders/:id', async (req, res) => {
   if (!pool) return res.status(500).json({error: "DB Not Init"});
   const conn = await pool.getConnection();
@@ -506,9 +580,9 @@ app.delete('/api/employees/:id', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { login, password } = req.body;
-        // Busca usuário e faz join (opcional, mas bom saber o nome da empresa)
+        // Busca usuário e status da empresa
         const [rows] = await pool.query(`
-            SELECT e.*, c.name as companyName 
+            SELECT e.*, c.name as companyName, c.status as companyStatus
             FROM employees e 
             LEFT JOIN companies c ON e.company_id = c.id
             WHERE e.login = ? AND e.password = ?
@@ -516,10 +590,15 @@ app.post('/api/login', async (req, res) => {
 
         if (rows.length > 0) {
             const user = rows[0];
-            // Rename for frontend consistency
+            
+            // Check if company is active (skip for Super Admin who has company_id = null)
+            if (user.company_id && user.companyStatus === 'inactive') {
+                return res.status(403).json({ error: 'Sua empresa está suspensa. Entre em contato com o suporte.' });
+            }
+
             res.json({
                 ...user,
-                companyId: user.company_id, // ensure camelCase
+                companyId: user.company_id,
                 companyName: user.companyName
             });
         } else {
