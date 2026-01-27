@@ -291,14 +291,15 @@ app.post('/api/saas/checkout/:companyId', async (req, res) => {
     }
 });
 
-// Callback route to simulate automatic renewal
+// Callback route (Retorno simples do navegador)
 app.get('/api/saas/payment-success', async (req, res) => {
     try {
         const { company_id } = req.query;
         if (!company_id) return res.redirect('/');
 
-        // Add 30 days to next_payment_due
-        // If expired, set from NOW. If not expired, add to current due date.
+        // A renovação real é feita via WEBHOOK, mas fazemos um fallback aqui 
+        // caso o webhook atrase, apenas para UX (usuario ver liberado)
+        // OBS: Em produção critica, confiar APENAS no webhook é mais seguro.
         const [rows] = await pool.query("SELECT next_payment_due FROM companies WHERE id = ?", [company_id]);
         
         let newDueDate = new Date();
@@ -316,6 +317,73 @@ app.get('/api/saas/payment-success', async (req, res) => {
         res.status(500).json({ error: "Erro ao processar pagamento." });
     }
 });
+
+// --- WEBHOOK MERCADO PAGO ---
+// Processa notificações de pagamento em segundo plano
+const handleWebhook = async (req, res) => {
+    try {
+        const { type, data, action } = req.body;
+        // Mercado Pago pode enviar 'type' ou 'action' dependendo da versão do webhook
+        const isPayment = type === 'payment' || action === 'payment.created';
+        
+        console.log(`Webhook MP recebido: Type=${type}, Action=${action}, DataID=${data?.id}`);
+
+        if (isPayment && data?.id) {
+            const accessToken = await getMPAccessToken();
+            if (!accessToken) {
+                console.error("Webhook Error: Access Token não configurado.");
+                return res.status(500).send("Server Config Error");
+            }
+
+            // Consultar o pagamento na API do MP para garantir segurança e pegar status atual
+            const response = await fetch(`https://api.mercadopago.com/v1/payments/${data.id}`, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            });
+
+            if (response.ok) {
+                const payment = await response.json();
+                console.log(`Webhook Pagamento ${data.id}: Status=${payment.status}`);
+
+                if (payment.status === 'approved') {
+                    const companyId = payment.external_reference;
+                    
+                    if (companyId) {
+                         // Lógica de Renovação
+                        const [rows] = await pool.query("SELECT next_payment_due FROM companies WHERE id = ?", [companyId]);
+                        
+                        // Define data base: se venceu, é HOJE + 30. Se não venceu, é DATA_ATUAL + 30
+                        let baseDate = new Date();
+                        if (rows.length > 0 && rows[0].next_payment_due && new Date(rows[0].next_payment_due) > baseDate) {
+                            baseDate = new Date(rows[0].next_payment_due);
+                        }
+                        
+                        baseDate.setDate(baseDate.getDate() + 30);
+
+                        await pool.query(
+                            "UPDATE companies SET status = 'active', last_payment_date = NOW(), next_payment_due = ? WHERE id = ?", 
+                            [baseDate, companyId]
+                        );
+                        console.log(`Empresa ${companyId} renovada via Webhook até ${baseDate}`);
+                    }
+                }
+            } else {
+                console.error("Erro ao consultar pagamento no MP:", await response.text());
+            }
+        }
+
+        res.status(200).send("OK");
+    } catch (err) {
+        console.error("Webhook Exception:", err);
+        // Sempre responder 200/201 para o MP não ficar tentando reenviar infinitamente em caso de erro de lógica interna
+        res.status(200).send("Error processed");
+    }
+};
+
+// Mapeia nas duas rotas possíveis para garantir que funcione com sua configuração atual
+app.post('/api/webhook/mercadopago', handleWebhook);
+app.post('/subscription/webhook', handleWebhook);
 
 
 // --- PLANS ROUTES (Public GET, Admin CRUD) ---
