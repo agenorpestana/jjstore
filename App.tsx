@@ -8,6 +8,7 @@ import { OrderDetails } from './components/OrderDetails';
 import { SupportChat } from './components/SupportChat';
 import { AdminDashboard } from './components/AdminDashboard';
 import { SuperAdminDashboard } from './components/SuperAdminDashboard';
+import { SubscriptionBlock } from './components/SubscriptionBlock';
 
 function App() {
   // Global Settings State
@@ -147,9 +148,23 @@ function App() {
 
   // If Logged In, Render Dashboard based on role
   if (currentUser) {
+    // Access Control Logic
     if (currentUser.accessLevel === 'saas_admin') {
         return (
             <SuperAdminDashboard 
+                currentUser={currentUser}
+                onLogout={() => {
+                    setCurrentUser(null);
+                    window.location.reload();
+                }}
+            />
+        )
+    }
+
+    // Block Access if Company is Pending Payment (Trial Expired or Late Payment)
+    if (currentUser.companyStatus === 'pending_payment') {
+        return (
+            <SubscriptionBlock 
                 currentUser={currentUser}
                 onLogout={() => {
                     setCurrentUser(null);

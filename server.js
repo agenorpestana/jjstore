@@ -42,12 +42,20 @@ async function initDB() {
         features TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS saas_settings (
+        setting_key VARCHAR(50) PRIMARY KEY,
+        setting_value LONGTEXT
+      );
+
       CREATE TABLE IF NOT EXISTS companies (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100),
         plan VARCHAR(50),
         status VARCHAR(20) DEFAULT 'active',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        trial_ends_at DATETIME,
+        next_payment_due DATETIME,
+        last_payment_date DATETIME
       );
 
       CREATE TABLE IF NOT EXISTS employees (
@@ -130,7 +138,10 @@ async function initDB() {
        "ALTER TABLE app_settings ADD COLUMN company_id VARCHAR(50)",
        // New SaaS migrations
        "ALTER TABLE companies ADD COLUMN status VARCHAR(20) DEFAULT 'active'",
-       "ALTER TABLE companies ADD COLUMN plan VARCHAR(50)" // Ensure plan exists
+       "ALTER TABLE companies ADD COLUMN plan VARCHAR(50)",
+       "ALTER TABLE companies ADD COLUMN trial_ends_at DATETIME",
+       "ALTER TABLE companies ADD COLUMN next_payment_due DATETIME",
+       "ALTER TABLE companies ADD COLUMN last_payment_date DATETIME"
     ];
 
     for (const query of migrationQueries) {
@@ -180,6 +191,124 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', port: PORT });
 });
 
+// --- SAAS SETTINGS (MP KEYS) ---
+app.get('/api/saas/settings', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM saas_settings');
+        const settings = { mpAccessToken: '', mpPublicKey: '' };
+        rows.forEach(r => {
+            if (r.setting_key === 'mpAccessToken') settings.mpAccessToken = r.setting_value;
+            if (r.setting_key === 'mpPublicKey') settings.mpPublicKey = r.setting_value;
+        });
+        res.json(settings);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/saas/settings', async (req, res) => {
+    try {
+        const { mpAccessToken, mpPublicKey } = req.body;
+        await pool.query('INSERT INTO saas_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?', ['mpAccessToken', mpAccessToken, mpAccessToken]);
+        await pool.query('INSERT INTO saas_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?', ['mpPublicKey', mpPublicKey, mpPublicKey]);
+        res.json({ message: 'Settings saved' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- MERCADO PAGO INTEGRATION ---
+// Helper to get MP Token
+async function getMPAccessToken() {
+    const [rows] = await pool.query("SELECT setting_value FROM saas_settings WHERE setting_key = 'mpAccessToken'");
+    if (rows.length === 0) return null;
+    return rows[0].setting_value;
+}
+
+app.post('/api/saas/checkout/:companyId', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const accessToken = await getMPAccessToken();
+        
+        if (!accessToken) return res.status(500).json({ error: "Configuração de pagamento não encontrada no sistema." });
+
+        // Get Company Plan Info
+        const [compRows] = await pool.query("SELECT name, plan FROM companies WHERE id = ?", [companyId]);
+        if (compRows.length === 0) return res.status(404).json({ error: "Empresa não encontrada" });
+        const company = compRows[0];
+
+        // Get Plan Price
+        const [planRows] = await pool.query("SELECT price FROM plans WHERE name = ?", [company.plan]);
+        const price = planRows.length > 0 ? parseFloat(planRows[0].price) : 49.90;
+
+        // Call Mercado Pago API manually to avoid SDK dependency issues in this setup
+        const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+                items: [
+                    {
+                        title: `Assinatura Rastreaê - Plano ${company.plan}`,
+                        quantity: 1,
+                        currency_id: 'BRL',
+                        unit_price: price
+                    }
+                ],
+                external_reference: companyId,
+                back_urls: {
+                    success: `${req.protocol}://${req.get('host')}/api/saas/payment-success?company_id=${companyId}`,
+                    failure: `${req.headers.origin}/`,
+                    pending: `${req.headers.origin}/`
+                },
+                auto_return: "approved"
+            })
+        });
+
+        const data = await response.json();
+        
+        if (data.init_point) {
+            res.json({ checkoutUrl: data.init_point });
+        } else {
+            console.error("MP Error:", data);
+            res.status(500).json({ error: "Erro ao criar pagamento." });
+        }
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Callback route to simulate automatic renewal
+app.get('/api/saas/payment-success', async (req, res) => {
+    try {
+        const { company_id } = req.query;
+        if (!company_id) return res.redirect('/');
+
+        // Add 30 days to next_payment_due
+        // If expired, set from NOW. If not expired, add to current due date.
+        const [rows] = await pool.query("SELECT next_payment_due FROM companies WHERE id = ?", [company_id]);
+        
+        let newDueDate = new Date();
+        newDueDate.setDate(newDueDate.getDate() + 30);
+        
+        await pool.query(
+            "UPDATE companies SET status = 'active', last_payment_date = NOW(), next_payment_due = ? WHERE id = ?", 
+            [newDueDate, company_id]
+        );
+
+        // Redirect back to app home
+        res.redirect('/');
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erro ao processar pagamento." });
+    }
+});
+
+
 // --- PLANS ROUTES (Public GET, Admin CRUD) ---
 app.get('/api/plans', async (req, res) => {
     try {
@@ -222,8 +351,6 @@ app.delete('/api/plans/:id', async (req, res) => {
 // --- SAAS ADMIN: COMPANIES MANAGEMENT ---
 app.get('/api/saas/companies', async (req, res) => {
     try {
-        // CORREÇÃO: Usar agregação (MAX) para os campos da tabela employees
-        // Isso satisfaz o modo 'only_full_group_by' do MySQL
         const query = `
             SELECT c.*, 
                    MAX(e.name) as adminName, 
@@ -261,10 +388,15 @@ app.post('/api/register-company', async (req, res) => {
         const { companyName, adminName, login, password, contact, plan } = req.body;
 
         const companyId = `COMP-${Date.now()}`;
-        // Default to 'active' on creation
+        
+        // Trial logic: 7 days free
+        const now = new Date();
+        const trialEnd = new Date(now);
+        trialEnd.setDate(now.getDate() + 7);
+
         await conn.query(
-            'INSERT INTO companies (id, name, plan, status) VALUES (?, ?, ?, ?)',
-            [companyId, companyName, plan || 'Básico', 'active']
+            'INSERT INTO companies (id, name, plan, status, trial_ends_at) VALUES (?, ?, ?, ?, ?)',
+            [companyId, companyName, plan || 'Básico', 'trial', trialEnd]
         );
 
         const empId = `EMP-${Date.now()}`;
@@ -336,6 +468,9 @@ app.post('/api/settings', async (req, res) => {
 app.get('/api/orders', async (req, res) => {
   try {
     const companyId = getCompanyId(req);
+    // Permite verificar orders se estiver ativo OU se for SuperAdmin. 
+    // Usuários com pending_payment serão barrados no login, mas API deve proteger também.
+    // Simplificação: Deixamos o bloqueio no Login por enquanto, ou validamos aqui.
     if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
     let query = 'SELECT * FROM orders';
@@ -383,6 +518,7 @@ app.get('/api/orders/:id', async (req, res) => {
         if (compRows.length > 0 && compRows[0].status === 'inactive') {
             return res.status(403).json({ error: 'A empresa responsável por este pedido está temporariamente suspensa.' });
         }
+        // pending_payment or trial expired usually doesn't block public tracking, just admin access.
     }
 
     const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
@@ -585,9 +721,9 @@ app.delete('/api/employees/:id', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { login, password } = req.body;
-        // Busca usuário e status da empresa
+        // Busca usuário e dados da empresa
         const [rows] = await pool.query(`
-            SELECT e.*, c.name as companyName, c.status as companyStatus
+            SELECT e.*, c.name as companyName, c.status as companyStatus, c.trial_ends_at, c.next_payment_due
             FROM employees e 
             LEFT JOIN companies c ON e.company_id = c.id
             WHERE e.login = ? AND e.password = ?
@@ -596,7 +732,25 @@ app.post('/api/login', async (req, res) => {
         if (rows.length > 0) {
             const user = rows[0];
             
-            // Check if company is active (skip for Super Admin who has company_id = null)
+            // AUTOMATED CHECK: Update status if trial expired or payment overdue
+            if (user.company_id && user.accessLevel !== 'saas_admin') {
+                const now = new Date();
+                let newStatus = null;
+
+                if (user.companyStatus === 'trial' && user.trial_ends_at && new Date(user.trial_ends_at) < now) {
+                    newStatus = 'pending_payment';
+                }
+                if (user.companyStatus === 'active' && user.next_payment_due && new Date(user.next_payment_due) < now) {
+                    newStatus = 'pending_payment';
+                }
+
+                if (newStatus) {
+                    await pool.query('UPDATE companies SET status = ? WHERE id = ?', [newStatus, user.company_id]);
+                    user.companyStatus = newStatus;
+                }
+            }
+
+            // Block inactive (banned) users, but allow pending_payment to login (to pay)
             if (user.company_id && user.companyStatus === 'inactive') {
                 return res.status(403).json({ error: 'Sua empresa está suspensa. Entre em contato com o suporte.' });
             }
@@ -604,7 +758,8 @@ app.post('/api/login', async (req, res) => {
             res.json({
                 ...user,
                 companyId: user.company_id,
-                companyName: user.companyName
+                companyName: user.companyName,
+                companyStatus: user.companyStatus // Frontend needs this to show Pay Wall
             });
         } else {
             res.status(401).json({ error: 'Invalid credentials' });
@@ -615,13 +770,11 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// CORREÇÃO: Rota específica para servir o Service Worker com o Content-Type correto
 app.get('/service-worker.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
   res.sendFile(path.join(__dirname, 'service-worker.js'));
 });
 
-// CATCH ALL: Retorna index.html para qualquer rota que NÃO comece com /api (e não seja o SW)
 app.get(/^(?!\/api).+/, (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });

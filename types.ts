@@ -68,6 +68,8 @@ export interface Employee {
   login?: string;
   password?: string;
   accessLevel: AccessLevel;
+  // Auxiliar para frontend
+  companyStatus?: 'active' | 'inactive' | 'trial' | 'pending_payment';
 }
 
 export interface NewEmployeeInput {
@@ -96,10 +98,17 @@ export interface Company {
   id: string;
   name: string;
   plan: string;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'trial' | 'pending_payment';
   created_at: string;
+  trial_ends_at?: string;
+  next_payment_due?: string;
   // Campos auxiliares vindos do join com employees (admin)
   adminName?: string;
   contact?: string;
   login?: string;
+}
+
+export interface SaasSettings {
+  mpAccessToken: string;
+  mpPublicKey: string;
 }

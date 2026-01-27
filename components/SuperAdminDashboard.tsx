@@ -1,15 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
-import { Building, X, Search, Shield, LogOut, LayoutList, Plus, Edit2, Trash2, CheckCircle, Ban, Phone, User, Calendar, CreditCard } from 'lucide-react';
+import { Building, X, Search, Shield, LogOut, LayoutList, Plus, Edit2, Trash2, CheckCircle, Ban, Phone, User, Calendar, CreditCard, Settings, Save } from 'lucide-react';
 import { Employee, Company, Plan } from '../types';
-import { getCompanies, updateCompanyStatus, getPlans, createPlan, updatePlan, deletePlan, registerCompany } from '../services/mockData';
+import { getCompanies, updateCompanyStatus, getPlans, createPlan, updatePlan, deletePlan, registerCompany, getSaasSettings, saveSaasSettings } from '../services/mockData';
 
 interface SuperAdminDashboardProps {
   currentUser: Employee;
   onLogout: () => void;
 }
 
-type Tab = 'companies' | 'plans';
+type Tab = 'companies' | 'plans' | 'settings';
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ currentUser, onLogout }) => {
   const [activeTab, setActiveTab] = useState<Tab>('companies');
@@ -17,10 +17,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Settings State
+  const [mpAccessToken, setMpAccessToken] = useState('');
+  const [mpPublicKey, setMpPublicKey] = useState('');
+
   // Modals
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
-  const [showCompanyModal, setShowCompanyModal] = useState(false); // Para registrar empresas manualmente
+  const [showCompanyModal, setShowCompanyModal] = useState(false); 
 
   // Plan Form State
   const [planForm, setPlanForm] = useState({ name: '', price: '', description: '', features: '' });
@@ -38,6 +42,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
   useEffect(() => {
     if (activeTab === 'companies') fetchCompanies();
     if (activeTab === 'plans') fetchPlans();
+    if (activeTab === 'settings') fetchSettings();
   }, [activeTab]);
 
   const fetchCompanies = async () => {
@@ -53,6 +58,23 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
       setPlans(data);
       setLoading(false);
   };
+
+  const fetchSettings = async () => {
+      setLoading(true);
+      const settings = await getSaasSettings();
+      setMpAccessToken(settings.mpAccessToken || '');
+      setMpPublicKey(settings.mpPublicKey || '');
+      setLoading(false);
+  }
+
+  const handleSaveSettings = async () => {
+      try {
+          await saveSaasSettings({ mpAccessToken, mpPublicKey });
+          alert('Chaves API salvas com sucesso!');
+      } catch (err) {
+          alert('Erro ao salvar');
+      }
+  }
 
   const handleToggleStatus = async (id: string, currentStatus: string) => {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
@@ -151,6 +173,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
               >
                   <LayoutList size={18} /> Planos
               </button>
+              <button 
+                onClick={() => setActiveTab('settings')}
+                className={`px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition ${activeTab === 'settings' ? 'bg-white text-gray-900 shadow-sm' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+              >
+                  <Settings size={18} /> Configurações
+              </button>
           </div>
 
           {/* Companies Tab */}
@@ -182,6 +210,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
                                       <td className="px-6 py-4">
                                           <div className="text-sm font-medium text-gray-900">{company.name}</div>
                                           <div className="text-xs text-gray-400">ID: {company.id}</div>
+                                          {company.trial_ends_at && (
+                                              <div className="text-xs text-blue-500 mt-1">Trial até: {new Date(company.trial_ends_at).toLocaleDateString()}</div>
+                                          )}
                                       </td>
                                       <td className="px-6 py-4">
                                           <div className="flex flex-col text-sm">
@@ -196,22 +227,29 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
                                           </span>
                                       </td>
                                       <td className="px-6 py-4">
-                                          {company.status === 'active' ? (
+                                          {company.status === 'active' && (
                                               <span className="flex items-center gap-1 text-green-600 text-sm font-medium"><CheckCircle size={16} /> Ativo</span>
-                                          ) : (
+                                          )}
+                                          {company.status === 'inactive' && (
                                               <span className="flex items-center gap-1 text-red-600 text-sm font-medium"><Ban size={16} /> Suspenso</span>
+                                          )}
+                                          {company.status === 'trial' && (
+                                              <span className="flex items-center gap-1 text-blue-600 text-sm font-medium"><CreditCard size={16} /> Trial</span>
+                                          )}
+                                          {company.status === 'pending_payment' && (
+                                              <span className="flex items-center gap-1 text-orange-600 text-sm font-medium"><CreditCard size={16} /> Pagamento Pendente</span>
                                           )}
                                       </td>
                                       <td className="px-6 py-4 text-right">
                                           <button 
                                               onClick={() => handleToggleStatus(company.id, company.status)}
                                               className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${
-                                                  company.status === 'active' 
-                                                  ? 'text-red-600 bg-red-50 hover:bg-red-100' 
-                                                  : 'text-green-600 bg-green-50 hover:bg-green-100'
+                                                  company.status === 'inactive' 
+                                                  ? 'text-green-600 bg-green-50 hover:bg-green-100'
+                                                  : 'text-red-600 bg-red-50 hover:bg-red-100' 
                                               }`}
                                           >
-                                              {company.status === 'active' ? 'Suspender' : 'Ativar'}
+                                              {company.status === 'inactive' ? 'Ativar' : 'Suspender'}
                                           </button>
                                       </td>
                                   </tr>
@@ -261,6 +299,45 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
                           </div>
                       </div>
                   ))}
+              </div>
+          )}
+
+          {/* Settings Tab */}
+          {activeTab === 'settings' && (
+              <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <CreditCard className="text-blue-600" /> Integração Mercado Pago
+                  </h3>
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Access Token (Produção)</label>
+                          <input 
+                              type="text" 
+                              className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500"
+                              value={mpAccessToken}
+                              onChange={e => setMpAccessToken(e.target.value)}
+                              placeholder="APP_USR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Public Key</label>
+                          <input 
+                              type="text" 
+                              className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500"
+                              value={mpPublicKey}
+                              onChange={e => setMpPublicKey(e.target.value)}
+                              placeholder="APP_USR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                          />
+                      </div>
+                      <div className="pt-4 flex justify-end">
+                          <button 
+                              onClick={handleSaveSettings}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2"
+                          >
+                              <Save size={18} /> Salvar Chaves
+                          </button>
+                      </div>
+                  </div>
               </div>
           )}
       </div>

@@ -1,5 +1,5 @@
 
-import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, Plan, Company } from '../types';
+import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, Plan, Company, SaasSettings } from '../types';
 
 // Detecta se estamos rodando localmente ou em produção
 const getBaseUrl = () => {
@@ -104,6 +104,32 @@ export const updateCompanyStatus = async (id: string, status: 'active' | 'inacti
     });
     await handleResponse(response);
 };
+
+// --- SaaS Settings (Super Admin) ---
+export const getSaasSettings = async (): Promise<SaasSettings> => {
+    const response = await fetch(`${API_URL}/saas/settings`, {
+        headers: getHeaders()
+    });
+    return handleResponse(response);
+}
+
+export const saveSaasSettings = async (settings: SaasSettings): Promise<void> => {
+    const response = await fetch(`${API_URL}/saas/settings`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(settings)
+    });
+    await handleResponse(response);
+}
+
+export const createCheckoutSession = async (companyId: string): Promise<string> => {
+    const response = await fetch(`${API_URL}/saas/checkout/${companyId}`, {
+        method: 'POST',
+        headers: getHeaders()
+    });
+    const data = await handleResponse(response);
+    return data.checkoutUrl;
+}
 
 // --- Authentication & Registration ---
 export const authenticateUser = async (login: string, pass: string): Promise<Employee | null> => {
