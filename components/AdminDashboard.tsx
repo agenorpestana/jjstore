@@ -27,7 +27,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
   useEffect(() => {
       if (isAdmin && (currentUser.next_payment_due || currentUser.trial_ends_at)) {
-          const dueDateStr = currentUser.status === 'trial' ? currentUser.trial_ends_at : currentUser.next_payment_due;
+          const dueDateStr = currentUser.companyStatus === 'trial' ? currentUser.trial_ends_at : currentUser.next_payment_due;
           if (dueDateStr) {
               const dueDate = new Date(dueDateStr);
               const now = new Date();

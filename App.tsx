@@ -89,9 +89,11 @@ function App() {
   const loadPlans = async () => {
       try {
           const plans = await getPlans();
-          setAvailablePlans(plans);
-          if (plans.length > 0) {
-              setRegisterForm(prev => ({ ...prev, plan: plans[0].name }));
+          // Filter only visible plans for new customers
+          const visiblePlans = plans.filter(p => p.visible);
+          setAvailablePlans(visiblePlans);
+          if (visiblePlans.length > 0) {
+              setRegisterForm(prev => ({ ...prev, plan: visiblePlans[0].name }));
           }
       } catch (e) {
           console.error("Failed to load plans", e);

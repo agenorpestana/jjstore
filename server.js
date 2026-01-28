@@ -41,7 +41,8 @@ async function initDB() {
         name VARCHAR(50),
         price DECIMAL(10, 2),
         description TEXT,
-        features TEXT
+        features TEXT,
+        visible BOOLEAN DEFAULT TRUE
       );
 
       CREATE TABLE IF NOT EXISTS saas_settings (
@@ -143,7 +144,8 @@ async function initDB() {
        "ALTER TABLE companies ADD COLUMN plan VARCHAR(50)",
        "ALTER TABLE companies ADD COLUMN trial_ends_at DATETIME",
        "ALTER TABLE companies ADD COLUMN next_payment_due DATETIME",
-       "ALTER TABLE companies ADD COLUMN last_payment_date DATETIME"
+       "ALTER TABLE companies ADD COLUMN last_payment_date DATETIME",
+       "ALTER TABLE plans ADD COLUMN visible BOOLEAN DEFAULT TRUE"
     ];
 
     for (const query of migrationQueries) {
@@ -157,10 +159,10 @@ async function initDB() {
     // Seed Plans if empty
     const [plans] = await pool.query('SELECT * FROM plans');
     if (plans.length === 0) {
-        await pool.query(`INSERT INTO plans (name, price, description, features) VALUES 
-            ('Básico', 49.90, 'Para pequenas empresas', 'Até 50 pedidos/mês, 1 Usuário'),
-            ('Pro', 99.90, 'Para empresas em crescimento', 'Pedidos Ilimitados, 5 Usuários, IA Inclusa'),
-            ('Enterprise', 199.90, 'Para grandes operações', 'Tudo ilimitado, Suporte Prioritário')
+        await pool.query(`INSERT INTO plans (name, price, description, features, visible) VALUES 
+            ('Básico', 49.90, 'Para pequenas empresas', 'Até 50 pedidos/mês, 1 Usuário', TRUE),
+            ('Pro', 99.90, 'Para empresas em crescimento', 'Pedidos Ilimitados, 5 Usuários, IA Inclusa', TRUE),
+            ('Enterprise', 199.90, 'Para grandes operações', 'Tudo ilimitado, Suporte Prioritário', TRUE)
         `);
     }
 
@@ -428,7 +430,9 @@ app.post('/subscription/webhook', handleWebhook);
 app.get('/api/plans', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM plans');
-        res.json(rows);
+        // Converte 1/0 para boolean
+        const plans = rows.map(p => ({ ...p, visible: !!p.visible }));
+        res.json(plans);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -437,7 +441,7 @@ app.get('/api/plans', async (req, res) => {
 app.post('/api/plans', async (req, res) => {
     try {
         const { name, price, description, features } = req.body;
-        await pool.query('INSERT INTO plans (name, price, description, features) VALUES (?, ?, ?, ?)', [name, price, description, features]);
+        await pool.query('INSERT INTO plans (name, price, description, features, visible) VALUES (?, ?, ?, ?, TRUE)', [name, price, description, features]);
         res.status(201).json({ message: 'Plano criado' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -449,6 +453,17 @@ app.put('/api/plans/:id', async (req, res) => {
         const { name, price, description, features } = req.body;
         await pool.query('UPDATE plans SET name=?, price=?, description=?, features=? WHERE id=?', [name, price, description, features, req.params.id]);
         res.json({ message: 'Plano atualizado' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Rota para alternar visibilidade
+app.patch('/api/plans/:id/visibility', async (req, res) => {
+    try {
+        const { visible } = req.body;
+        await pool.query('UPDATE plans SET visible=? WHERE id=?', [visible, req.params.id]);
+        res.json({ message: 'Visibilidade atualizada' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

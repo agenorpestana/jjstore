@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Building, X, Search, Shield, LogOut, LayoutList, Plus, Edit2, Trash2, CheckCircle, Ban, Phone, User, Calendar, CreditCard, Settings, Save, DollarSign } from 'lucide-react';
+import { Building, X, Search, Shield, LogOut, LayoutList, Plus, Edit2, Trash2, CheckCircle, Ban, Phone, User, Calendar, CreditCard, Settings, Save, DollarSign, Eye, EyeOff } from 'lucide-react';
 import { Employee, Company, Plan } from '../types';
-import { getCompanies, updateCompanyStatus, getPlans, createPlan, updatePlan, deletePlan, registerCompany, getSaasSettings, saveSaasSettings, manualRenewCompany, deleteCompany } from '../services/mockData';
+import { getCompanies, updateCompanyStatus, getPlans, createPlan, updatePlan, deletePlan, registerCompany, getSaasSettings, saveSaasSettings, manualRenewCompany, deleteCompany, togglePlanVisibility } from '../services/mockData';
 
 interface SuperAdminDashboardProps {
   currentUser: Employee;
@@ -130,7 +130,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
           name: planForm.name,
           price: parseFloat(planForm.price),
           description: planForm.description,
-          features: planForm.features
+          features: planForm.features,
+          visible: editingPlan ? editingPlan.visible : true
       };
 
       if (editingPlan) {
@@ -147,6 +148,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
           await deletePlan(id);
           fetchPlans();
       }
+  }
+
+  const handleTogglePlanVisibility = async (id: number, currentVisible: boolean) => {
+      await togglePlanVisibility(id, !currentVisible);
+      fetchPlans();
   }
 
   // --- Company Registration Logic ---
@@ -322,9 +328,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
                   </button>
 
                   {plans.map(plan => (
-                      <div key={plan.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
+                      <div key={plan.id} className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col ${!plan.visible ? 'opacity-75 bg-gray-50' : ''}`}>
                           <div className="flex justify-between items-start mb-4">
-                              <h3 className="text-xl font-bold text-gray-800">{plan.name}</h3>
+                              <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                  {plan.name}
+                                  {!plan.visible && <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Oculto</span>}
+                              </h3>
                               <span className="text-lg font-semibold text-green-600">
                                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plan.price)}
                                   <span className="text-sm text-gray-400 font-normal">/mês</span>
@@ -341,6 +350,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
                           </div>
                           <div className="flex gap-2 border-t border-gray-100 pt-4">
                               <button onClick={() => handleOpenPlanModal(plan)} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium text-sm hover:bg-gray-200">Editar</button>
+                              <button 
+                                onClick={() => handleTogglePlanVisibility(plan.id, plan.visible)} 
+                                title={plan.visible ? "Ocultar para novos clientes" : "Mostrar para novos clientes"}
+                                className={`px-3 rounded-lg ${plan.visible ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
+                              >
+                                  {plan.visible ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
                               <button onClick={() => handleDeletePlan(plan.id)} className="px-3 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"><Trash2 size={16} /></button>
                           </div>
                       </div>
@@ -452,7 +468,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
                           className="w-full border border-gray-300 rounded-lg p-2.5 bg-white"
                           value={companyForm.plan} onChange={e => setCompanyForm({...companyForm, plan: e.target.value})}
                       >
-                          {plans.map(p => <option key={p.id} value={p.name}>{p.name} - R$ {p.price}</option>)}
+                          {plans.filter(p => p.visible).map(p => <option key={p.id} value={p.name}>{p.name} - R$ {p.price}</option>)}
                       </select>
                       <hr className="my-2"/>
                       <input 

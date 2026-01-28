@@ -80,6 +80,15 @@ export const updatePlan = async (id: number, plan: Omit<Plan, 'id'>): Promise<vo
     await handleResponse(response);
 };
 
+export const togglePlanVisibility = async (id: number, visible: boolean): Promise<void> => {
+    const response = await fetch(`${API_URL}/plans/${id}/visibility`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ visible })
+    });
+    await handleResponse(response);
+};
+
 export const deletePlan = async (id: number): Promise<void> => {
     const response = await fetch(`${API_URL}/plans/${id}`, {
         method: 'DELETE',

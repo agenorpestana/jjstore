@@ -95,6 +95,7 @@ export interface Plan {
   price: number;
   description: string;
   features: string; // JSON string ou lista separada por virgula
+  visible: boolean;
 }
 
 export interface Company {
