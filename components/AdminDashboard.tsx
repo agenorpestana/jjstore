@@ -181,7 +181,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           shippingAddress: order.shippingAddress,
           orderDate: parseDateToInput(order.orderDate),
           estimatedDelivery: parseDateToInput(order.estimatedDelivery),
-          paymentMethod: order.paymentMethod,
+          paymentMethod: order.paymentMethod, // Assuming this is string
           downPayment: order.downPayment,
           photos: order.photos || [],
           pressingDate: order.pressingDate || '',
@@ -249,10 +249,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         return;
     }
 
+    // Helper to format money for saving
+    const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+    let finalOrderForm = { ...orderForm };
+
+    // Se for criação de novo pedido E tiver entrada, formata o método para incluir o valor
+    if (!isEditingFullOrder && orderForm.downPayment > 0) {
+        // Se o método ainda não tiver sido formatado (previne dupla formatação se editar algo antes de salvar)
+        if (!orderForm.paymentMethod.includes('(')) {
+             finalOrderForm.paymentMethod = `${orderForm.paymentMethod} (${formatMoney(orderForm.downPayment)})`;
+        }
+    }
+
     if (isEditingFullOrder) {
-        await updateOrderFull(isEditingFullOrder, orderForm);
+        await updateOrderFull(isEditingFullOrder, finalOrderForm);
     } else {
-        await createOrder(orderForm);
+        await createOrder(finalOrderForm);
     }
     
     setShowOrderModal(false);
@@ -327,8 +340,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           alert("O valor informado é maior que o saldo restante.");
           return;
       }
+      
+      // Formata o valor para exibir junto com o método (Ex: "Pix (R$ 50,00)")
+      const formattedAmount = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
+      const methodWithAmount = `${paymentMethodRemaining} (${formattedAmount})`;
 
-      await registerPayment(viewingOrder.id, amount, paymentMethodRemaining);
+      await registerPayment(viewingOrder.id, amount, methodWithAmount);
       setPaymentAmount('');
       setPaymentMethodRemaining('Pix'); // Reset to default
       

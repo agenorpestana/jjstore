@@ -290,17 +290,18 @@ function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Left Column: Timeline */}
-              <div className="lg:col-span-2 space-y-8">
+            {/* LAYOUT GRID ALTERADO: 12 COLUNAS PARA MELHOR CONTROLE */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Left Column: Timeline (Ocupa 5 de 12 colunas no desktop = ~40%) */}
+              <div className="lg:col-span-5 space-y-8">
                 <StatusTimeline
                   timeline={currentOrder.timeline}
                   currentStatus={currentOrder.currentStatus}
                 />
               </div>
 
-              {/* Right Column: Details */}
-              <div className="lg:col-span-1">
+              {/* Right Column: Details (Ocupa 7 de 12 colunas no desktop = ~60%) */}
+              <div className="lg:col-span-7">
                 <OrderDetails order={currentOrder} appSettings={appSettings} />
               </div>
             </div>
