@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, PackageOpen, ArrowLeft, Lock, User, LogIn, X, Download, Building, Phone as PhoneIcon, UserPlus, CreditCard } from 'lucide-react';
 import { Order, Employee, AppSettings, Plan } from './types';
-import { getOrderById, authenticateUser, getAppSettings, registerCompany, getPlans } from './services/mockData';
+import { getOrderById, authenticateUser, getAppSettings, registerCompany, getPlans, setCompanyContext } from './services/mockData';
 import { StatusTimeline } from './components/StatusTimeline';
 import { OrderDetails } from './components/OrderDetails';
 import { SupportChat } from './components/SupportChat';
@@ -43,14 +43,46 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Load Settings on Mount
-  const loadSettings = async () => {
+  // Load Settings on Mount & Restore Session
+  const initializeApp = async () => {
     try {
+        // 1. Load Settings
         const settings = await getAppSettings();
         setAppSettings(settings);
         document.title = `${settings.appName} - Acompanhamento de Pedidos`;
+
+        // 2. Restore User Session (Persistence)
+        const storedUser = localStorage.getItem('rastreae_user');
+        if (storedUser) {
+            const user = JSON.parse(storedUser);
+            // Restaurar contexto da empresa para requisições
+            if (user.companyId) {
+                setCompanyContext(user.companyId);
+            } else {
+                setCompanyContext('null'); // super admin
+            }
+            setCurrentUser(user);
+        }
+
+        // 3. Restore Order from URL (Persistence)
+        const params = new URLSearchParams(window.location.search);
+        const urlOrderId = params.get('orderId');
+        if (urlOrderId) {
+            setOrderId(urlOrderId);
+            setLoading(true);
+            try {
+                const order = await getOrderById(urlOrderId);
+                setCurrentOrder(order);
+            } catch (err) {
+                // Silently fail or remove param if invalid
+                window.history.replaceState({}, '', window.location.pathname);
+            } finally {
+                setLoading(false);
+            }
+        }
+
     } catch (e) {
-        console.error("Failed to load settings", e);
+        console.error("Failed to initialize app", e);
     }
   };
 
@@ -67,7 +99,7 @@ function App() {
   }
 
   useEffect(() => {
-    loadSettings();
+    initializeApp();
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setInstallPrompt(e);
@@ -97,6 +129,8 @@ function App() {
     try {
       const order = await getOrderById(orderId);
       setCurrentOrder(order);
+      // Atualiza URL sem recarregar a página para persistência
+      window.history.pushState({}, '', `?orderId=${orderId}`);
     } catch (err) {
       setError('Não foi possível encontrar o pedido. Verifique o número e tente novamente.');
     } finally {
@@ -107,6 +141,8 @@ function App() {
   const clearSearch = () => {
     setCurrentOrder(null);
     setOrderId('');
+    // Limpa URL
+    window.history.pushState({}, '', window.location.pathname);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -117,13 +153,22 @@ function App() {
           const user = await authenticateUser(loginForm.login, loginForm.password);
           if (user) {
               setCurrentUser(user);
+              // Salva sessão
+              localStorage.setItem('rastreae_user', JSON.stringify(user));
               setShowLoginModal(false);
               setLoginForm({ login: '', password: '' });
-              loadSettings();
+              initializeApp(); // Reload settings just in case
           }
       } catch (err: any) {
           setLoginError(err.message || 'Login ou senha inválidos.');
       }
+  };
+
+  const handleLogout = () => {
+      setCurrentUser(null);
+      localStorage.removeItem('rastreae_user');
+      setCompanyContext(null); // Limpa contexto
+      window.location.reload();
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -153,10 +198,7 @@ function App() {
         return (
             <SuperAdminDashboard 
                 currentUser={currentUser}
-                onLogout={() => {
-                    setCurrentUser(null);
-                    window.location.reload();
-                }}
+                onLogout={handleLogout}
             />
         )
     }
@@ -166,10 +208,7 @@ function App() {
         return (
             <SubscriptionBlock 
                 currentUser={currentUser}
-                onLogout={() => {
-                    setCurrentUser(null);
-                    window.location.reload();
-                }}
+                onLogout={handleLogout}
             />
         )
     }
@@ -177,12 +216,9 @@ function App() {
     return (
         <AdminDashboard 
             currentUser={currentUser} 
-            onLogout={() => {
-                setCurrentUser(null);
-                window.location.reload(); // Reset state properly
-            }}
+            onLogout={handleLogout}
             appSettings={appSettings}
-            onUpdateSettings={loadSettings}
+            onUpdateSettings={initializeApp}
         />
     );
   }
