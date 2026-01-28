@@ -226,7 +226,7 @@ export const createOrder = async (input: NewOrderInput): Promise<Order> => {
     items: input.items.map((item, idx) => ({
       ...item,
       id: `new-${idx}`,
-      image: `https://picsum.photos/100/100?random=${Math.random()}`
+      image: '' // No random image, will use logo/default icon
     })),
     timeline: [
       {
@@ -286,7 +286,7 @@ export const updateOrderFull = async (id: string, input: NewOrderInput): Promise
             ...item,
             // Simple logic to keep ID if it looks like a DB ID, else generate temp one for backend to process
             id: (item as any).id || `temp-${idx}`, 
-            image: `https://picsum.photos/100/100?random=${Math.random()}`
+            image: '' // No random image
         }))
     };
 

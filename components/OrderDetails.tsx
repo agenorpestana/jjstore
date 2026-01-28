@@ -1,12 +1,14 @@
+
 import React, { useState } from 'react';
-import { Order } from '../types';
-import { MapPin, Calendar, CreditCard, DollarSign, Camera, X } from 'lucide-react';
+import { Order, AppSettings } from '../types';
+import { MapPin, Calendar, CreditCard, Camera, X, ShoppingCart } from 'lucide-react';
 
 interface OrderDetailsProps {
   order: Order;
+  appSettings: AppSettings;
 }
 
-export const OrderDetails: React.FC<OrderDetailsProps> = ({ order }) => {
+export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }) => {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const remainingBalance = order.total - (order.downPayment || 0);
 
@@ -126,11 +128,15 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order }) => {
         <div className="divide-y divide-gray-100">
             {order.items.map((item) => (
                 <div key={item.id} className="p-6 flex items-center gap-4 hover:bg-gray-50 transition-colors">
-                    <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-16 h-16 rounded-lg object-cover border border-gray-200"
-                    />
+                    {/* Imagem do Item: Prioriza Logo da Empresa, senão ícone de Carrinho */}
+                    <div className="w-16 h-16 rounded-lg border border-gray-200 bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {appSettings.logoUrl ? (
+                            <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+                        ) : (
+                            <ShoppingCart className="text-gray-400" size={24} />
+                        )}
+                    </div>
+
                     <div className="flex-1">
                         <h4 className="text-gray-900 font-medium">{item.name}</h4>
                         {item.size && (

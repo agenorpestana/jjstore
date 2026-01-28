@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart } from 'lucide-react';
 import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings } from '../types';
 import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession } from '../services/mockData';
 
@@ -39,8 +39,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   }, [currentUser, isAdmin]);
 
 
-  // Search & Pagination State
+  // Search, Filter & Pagination State
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL'); // NEW: Status Filter
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -84,10 +85,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   }, [activeTab, appSettings]);
 
   // --- Order Filtering & Pagination Logic ---
-  const filteredOrders = orders.filter(order => 
-    order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.customerName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredOrders = orders.filter(order => {
+    const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          order.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'ALL' || order.currentStatus === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
 
   // Reverse to show newest first (Last 10 orders)
   const sortedOrders = [...filteredOrders].reverse();
@@ -681,16 +686,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         {/* --- ORDERS TAB --- */}
         {activeTab === 'orders' && (
             <div className="space-y-4">
-                {/* Search Bar */}
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                    <input 
-                        type="text" 
-                        placeholder="Buscar por ID do pedido ou Nome do cliente..." 
-                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
-                        value={searchTerm}
-                        onChange={handleSearchChange}
-                    />
+                {/* Search Bar & Filter */}
+                <div className="flex flex-col md:flex-row gap-4">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                        <input 
+                            type="text" 
+                            placeholder="Buscar por ID do pedido ou Nome do cliente..." 
+                            className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
+                            value={searchTerm}
+                            onChange={handleSearchChange}
+                        />
+                    </div>
+                    {/* Status Filter */}
+                    <div className="w-full md:w-48">
+                        <select 
+                            className="w-full h-full border border-gray-200 rounded-xl px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-sm"
+                            value={statusFilter}
+                            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                        >
+                            <option value="ALL">Todos os Status</option>
+                            <option value={OrderStatus.PEDIDO_FEITO}>Pedido Feito</option>
+                            <option value={OrderStatus.EM_PRODUCAO}>Em Produção</option>
+                            <option value={OrderStatus.CONCLUIDO}>Concluído</option>
+                            <option value={OrderStatus.CANCELADO}>Cancelado</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -806,7 +827,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             </div>
         )}
 
-        {/* --- EMPLOYEES TAB (ADMIN ONLY) --- */}
+        {/* ... (Existing Employees Tab Code) ... */}
         {activeTab === 'employees' && isAdmin && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
              <div className="overflow-x-auto">
@@ -865,7 +886,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
          </div>
         )}
 
-        {/* --- SETTINGS TAB (ADMIN ONLY) --- */}
+        {/* ... (Existing Settings Tab Code) ... */}
         {activeTab === 'settings' && isAdmin && (
             <div className="max-w-2xl mx-auto">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -928,7 +949,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             </div>
         )}
 
-        {/* --- SUBSCRIPTION TAB (ADMIN ONLY) --- */}
+        {/* ... (Existing Subscription Tab Code) ... */}
         {activeTab === 'subscription' && isAdmin && (
             <div className="max-w-3xl mx-auto">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1001,7 +1022,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
       </div>
 
-      {/* --- MODAL: NEW EMPLOYEE --- */}
+      {/* ... (Existing New Employee Modal) ... */}
       {showNewEmployeeModal && isAdmin && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
@@ -1106,7 +1127,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           </div>
       )}
 
-      {/* --- MODAL: NEW / EDIT ORDER --- */}
+      {/* ... (Existing Order Modal - Keep as is) ... */}
       {showOrderModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -1340,7 +1361,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         </div>
       )}
 
-      {/* --- MODAL: EDIT STATUS --- */}
+      {/* ... (Existing Status Modal - Keep as is) ... */}
       {managingStatusOrder && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
@@ -1487,7 +1508,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                             <tbody className="divide-y divide-gray-200">
                                 {viewingOrder.items.map((item, idx) => (
                                     <tr key={idx}>
-                                        <td className="px-4 py-3 text-sm text-gray-900">{item.name}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-900 flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded border border-gray-200 bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+                                                {appSettings.logoUrl ? (
+                                                    <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-contain p-0.5" />
+                                                ) : (
+                                                    <ShoppingCart className="text-gray-400" size={16} />
+                                                )}
+                                            </div>
+                                            {item.name}
+                                        </td>
                                         <td className="px-4 py-3 text-sm text-center text-gray-600">{item.size || '-'}</td>
                                         <td className="px-4 py-3 text-sm text-center text-gray-600">{item.quantity}</td>
                                         <td className="px-4 py-3 text-sm text-right text-gray-600">
@@ -1528,77 +1558,90 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                     {/* Financial Summary */}
                     <div className="border-t border-gray-100 pt-6">
                         <h4 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                             <DollarSign size={18} /> Resumo Financeiro
+                             <DollarSign size={18} /> Resumo Financeiro Detalhado
                         </h4>
-                        <div className="flex flex-col md:flex-row gap-8">
-                             <div className="flex-1 space-y-3">
-                                 <div className="flex justify-between text-sm">
-                                     <span className="text-gray-600">Total Geral:</span>
-                                     <span className="font-bold text-lg text-gray-900">
-                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingOrder.total)}
-                                     </span>
+                        <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 space-y-4">
+                             <div className="flex flex-col md:flex-row justify-between gap-6">
+                                 {/* Totals */}
+                                 <div className="flex-1 space-y-2">
+                                     <div className="flex justify-between items-center text-sm">
+                                         <span className="text-gray-600">Total do Pedido:</span>
+                                         <span className="font-bold text-lg text-gray-900">
+                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingOrder.total)}
+                                         </span>
+                                     </div>
+                                     <div className="flex justify-between items-center text-sm">
+                                         <span className="text-gray-600">Total Pago:</span>
+                                         <span className="font-medium text-green-600">
+                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingOrder.downPayment || 0)}
+                                         </span>
+                                     </div>
+                                     <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
+                                         <span className="font-medium text-gray-800">Saldo Restante:</span>
+                                         <span className={`font-bold text-lg ${(viewingOrder.total - viewingOrder.downPayment) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.max(0, viewingOrder.total - viewingOrder.downPayment))}
+                                         </span>
+                                     </div>
                                  </div>
-                                 <div className="flex justify-between text-sm items-center">
-                                     <span className="text-gray-600">Valor Pago:</span>
-                                     <span className="font-medium text-green-600">
-                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingOrder.downPayment || 0)}
-                                     </span>
-                                 </div>
-                                 <div className="flex justify-between text-xs text-gray-500">
-                                     <span>Forma: {viewingOrder.paymentMethod}</span>
+                                 
+                                 {/* Payment Method Details */}
+                                 <div className="flex-1 border-l border-gray-200 pl-6">
+                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Histórico de Pagamento</p>
+                                    <div className="bg-white p-3 rounded-lg border border-gray-200 text-sm text-gray-700">
+                                        {viewingOrder.paymentMethod ? (
+                                            viewingOrder.paymentMethod.split('+').map((method, i) => (
+                                                <div key={i} className="flex items-center gap-2 py-1">
+                                                    <CreditCard size={14} className="text-gray-400" />
+                                                    <span>{method.trim()}</span>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <span className="text-gray-400 italic">Nenhum pagamento registrado</span>
+                                        )}
+                                    </div>
                                  </div>
                              </div>
 
-                             <div className="w-px bg-gray-200 hidden md:block"></div>
-
-                             <div className="flex-1">
-                                 <div className="flex justify-between text-sm mb-4">
-                                     <span className="font-medium text-gray-700">Restante a Pagar:</span>
-                                     <span className={`font-bold text-lg ${(viewingOrder.total - viewingOrder.downPayment) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.max(0, viewingOrder.total - viewingOrder.downPayment))}
-                                     </span>
-                                 </div>
-
-                                 {(viewingOrder.total - viewingOrder.downPayment) > 0.01 && (
-                                     <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                                         <label className="block text-xs font-medium text-blue-800 mb-2">Dar baixa no restante:</label>
-                                         <div className="flex flex-col gap-2">
-                                             <select 
-                                                 className="w-full border border-blue-200 rounded-lg p-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                                 value={paymentMethodRemaining}
-                                                 onChange={e => setPaymentMethodRemaining(e.target.value)}
-                                             >
-                                                 <option value="Pix">Pix</option>
-                                                 <option value="Dinheiro">Dinheiro</option>
-                                                 <option value="Cartão de Crédito">Cartão de Crédito</option>
-                                                 <option value="Cartão de Débito">Cartão de Débito</option>
-                                             </select>
-                                             <div className="flex gap-2">
-                                                <input 
-                                                    type="number" 
-                                                    placeholder="R$ 0,00"
-                                                    className="flex-1 border border-blue-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                                    value={paymentAmount}
-                                                    onChange={e => setPaymentAmount(e.target.value)}
-                                                />
-                                                <button 
-                                                    onClick={handleRegisterPayment}
-                                                    disabled={!paymentAmount}
-                                                    className="bg-primary hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
-                                                >
-                                                    Confirmar
-                                                </button>
-                                             </div>
+                             {/* Payment Action */}
+                             {(viewingOrder.total - viewingOrder.downPayment) > 0.01 && (
+                                 <div className="pt-4 border-t border-gray-200">
+                                     <label className="block text-xs font-medium text-blue-800 mb-2">Adicionar Pagamento (Baixa):</label>
+                                     <div className="flex flex-col sm:flex-row gap-2">
+                                         <select 
+                                             className="w-full sm:w-40 border border-blue-200 rounded-lg p-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                             value={paymentMethodRemaining}
+                                             onChange={e => setPaymentMethodRemaining(e.target.value)}
+                                         >
+                                             <option value="Pix">Pix</option>
+                                             <option value="Dinheiro">Dinheiro</option>
+                                             <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                             <option value="Cartão de Débito">Cartão de Débito</option>
+                                         </select>
+                                         <div className="flex gap-2 flex-1">
+                                            <input 
+                                                type="number" 
+                                                placeholder="Valor R$"
+                                                className="flex-1 border border-blue-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                                value={paymentAmount}
+                                                onChange={e => setPaymentAmount(e.target.value)}
+                                            />
+                                            <button 
+                                                onClick={handleRegisterPayment}
+                                                disabled={!paymentAmount}
+                                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 whitespace-nowrap"
+                                            >
+                                                Confirmar
+                                            </button>
                                          </div>
                                      </div>
-                                 )}
-                                 
-                                 {(viewingOrder.total - viewingOrder.downPayment) <= 0.01 && (
-                                     <div className="bg-green-50 p-3 rounded-lg border border-green-100 flex items-center gap-2 text-green-700 text-sm font-medium">
-                                         <CheckCircle size={16} /> Pedido Quitado
-                                     </div>
-                                 )}
-                             </div>
+                                 </div>
+                             )}
+                             
+                             {(viewingOrder.total - viewingOrder.downPayment) <= 0.01 && (
+                                 <div className="bg-green-100 p-3 rounded-lg border border-green-200 flex items-center justify-center gap-2 text-green-800 text-sm font-bold">
+                                     <CheckCircle size={18} /> Pedido Totalmente Quitado
+                                 </div>
+                             )}
                         </div>
                     </div>
                 </div>

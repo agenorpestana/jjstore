@@ -301,7 +301,7 @@ function App() {
 
               {/* Right Column: Details */}
               <div className="lg:col-span-1">
-                <OrderDetails order={currentOrder} />
+                <OrderDetails order={currentOrder} appSettings={appSettings} />
               </div>
             </div>
 
