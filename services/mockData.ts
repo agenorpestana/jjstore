@@ -33,10 +33,21 @@ const getHeaders = () => {
 // --- Helper for Errors ---
 const handleResponse = async (response: Response) => {
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || response.statusText);
+    let errorMessage = `Erro ${response.status}: ${response.statusText}`;
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.error || errorMessage;
+    } catch (e) {
+      // Not a JSON error or empty
+    }
+    throw new Error(errorMessage);
   }
-  return response.json();
+  
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return response.json();
+  }
+  return null;
 };
 
 // --- Settings ---
@@ -322,6 +333,17 @@ export const registerPayment = async (id: string, amount: number, method: string
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ amount, method })
+    });
+    await handleResponse(response);
+    return getOrderById(id);
+};
+
+// NOVO: Atualiza a lista completa de pagamentos e o valor total pago
+export const updateOrderPayments = async (id: string, downPayment: number, paymentMethod: string): Promise<Order> => {
+    const response = await fetch(`${API_URL}/orders/${id}/payment-update`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ downPayment, paymentMethod })
     });
     await handleResponse(response);
     return getOrderById(id);

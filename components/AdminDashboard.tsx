@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart } from 'lucide-react';
 import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings } from '../types';
-import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession } from '../services/mockData';
+import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, updateOrderPayments } from '../services/mockData';
 
 interface AdminDashboardProps {
   currentUser: Employee;
@@ -65,17 +65,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   // --- Data Loading ---
   const refreshOrders = async () => {
     setLoading(true);
-    const data = await getAllOrders();
-    setOrders(data);
-    setLoading(false);
+    try {
+        const data = await getAllOrders();
+        setOrders(data);
+    } catch (err) {
+        console.error("Erro ao carregar pedidos:", err);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const refreshEmployees = async () => {
       if (!isAdmin) return; // Users cannot see employees
       setLoading(true);
-      const data = await getEmployees();
-      setEmployees(data);
-      setLoading(false);
+      try {
+          const data = await getEmployees();
+          setEmployees(data);
+      } catch (err) {
+          console.error("Erro ao carregar funcionários:", err);
+      } finally {
+          setLoading(false);
+      }
   }
 
   useEffect(() => {
@@ -336,7 +346,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       const remaining = viewingOrder.total - (viewingOrder.downPayment || 0);
       const amount = Number(paymentAmount);
 
-      if (amount > remaining) {
+      if (amount > remaining + 0.01) { // 1 cent threshold
           alert("O valor informado é maior que o saldo restante.");
           return;
       }
@@ -355,6 +365,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       const updatedOrder = updatedList.find(o => o.id === viewingOrder.id) || null;
       setViewingOrder(updatedOrder);
   }
+
+  // NOVO: Função para excluir um pagamento específico da lista
+  const handleRemovePayment = async (index: number) => {
+      if (!viewingOrder || !isAdmin) return;
+      if (!window.confirm("Deseja realmente remover este registro de pagamento? O saldo do pedido será recalculado.")) return;
+
+      const methods = viewingOrder.paymentMethod ? viewingOrder.paymentMethod.split(' + ') : [];
+      if (index >= methods.length) return;
+
+      // Remove o item
+      methods.splice(index, 1);
+      const newPaymentMethod = methods.join(' + ');
+
+      // Recalcula o downPayment baseado nos strings restantes "R$ X.XX"
+      // Regex para encontrar valores monetários formatados no padrão PT-BR: R$ 1.234,56 ou R$ 10,00
+      let newDownPayment = 0;
+      methods.forEach(m => {
+          const match = m.match(/R\$\s?([\d.,]+)/);
+          if (match && match[1]) {
+              // Limpa formatação brasileira (ponto milhar e virgula decimal) para float padrão
+              const valStr = match[1].replace(/\./g, '').replace(',', '.');
+              newDownPayment += parseFloat(valStr);
+          }
+      });
+
+      try {
+          await updateOrderPayments(viewingOrder.id, newDownPayment, newPaymentMethod);
+          
+          // Refresh local state
+          const updatedList = await getAllOrders();
+          setOrders(updatedList);
+          const updatedOrder = updatedList.find(o => o.id === viewingOrder.id) || null;
+          setViewingOrder(updatedOrder);
+      } catch (err: any) {
+          alert("Erro ao remover pagamento: " + err.message);
+      }
+  };
 
   // --- Helpers for Aggregation ---
   const getSizeSummary = (items: { size: string; quantity: number }[]) => {
@@ -1595,7 +1642,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                      </div>
                                      <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
                                          <span className="font-medium text-gray-800">Saldo Restante:</span>
-                                         <span className={`font-bold text-lg ${(viewingOrder.total - viewingOrder.downPayment) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                         <span className={`font-bold text-lg ${(viewingOrder.total - viewingOrder.downPayment) > 0.01 ? 'text-red-600' : 'text-green-600'}`}>
                                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.max(0, viewingOrder.total - viewingOrder.downPayment))}
                                          </span>
                                      </div>
@@ -1604,12 +1651,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                  {/* Payment Method Details */}
                                  <div className="flex-1 border-l border-gray-200 pl-6">
                                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Histórico de Pagamento</p>
-                                    <div className="bg-white p-3 rounded-lg border border-gray-200 text-sm text-gray-700">
+                                    <div className="bg-white p-3 rounded-lg border border-gray-200 text-sm text-gray-700 space-y-1">
                                         {viewingOrder.paymentMethod ? (
-                                            viewingOrder.paymentMethod.split('+').map((method, i) => (
-                                                <div key={i} className="flex items-center gap-2 py-1">
-                                                    <CreditCard size={14} className="text-gray-400" />
-                                                    <span>{method.trim()}</span>
+                                            viewingOrder.paymentMethod.split(' + ').map((method, i) => (
+                                                <div key={i} className="flex items-center justify-between py-1 group">
+                                                    <div className="flex items-center gap-2">
+                                                        <CreditCard size={14} className="text-gray-400" />
+                                                        <span>{method.trim()}</span>
+                                                    </div>
+                                                    {isAdmin && (
+                                                        <button 
+                                                            onClick={() => handleRemovePayment(i)}
+                                                            className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"
+                                                            title="Excluir este pagamento"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             ))
                                         ) : (

@@ -849,6 +849,18 @@ app.post('/api/orders/:id/payment', async (req, res) => {
     }
 });
 
+// NOVO: Endpoint para atualizar pagamentos de forma direta (permitindo exclusão/edição)
+app.patch('/api/orders/:id/payment-update', async (req, res) => {
+    try {
+        const { downPayment, paymentMethod } = req.body;
+        await pool.query('UPDATE orders SET downPayment = ?, paymentMethod = ? WHERE id = ?', 
+            [downPayment, paymentMethod, req.params.id]);
+        res.json({ message: 'Payments updated' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/employees', async (req, res) => {
     try {
         const companyId = getCompanyId(req);
