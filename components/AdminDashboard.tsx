@@ -440,31 +440,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       <head>
         <title>Impressão Pedido #${viewingOrder.id}</title>
         <style>
-          @page { size: A4; margin: 1cm; }
-          body { font-family: 'Segoe UI', sans-serif; color: #1f2937; line-height: 1.5; }
-          .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-          .logo { font-size: 24px; font-weight: bold; color: #2563eb; display:flex; align-items:center; gap: 10px; }
-          .logo img { height: 40px; }
-          .order-id { font-size: 18px; color: #4b5563; }
-          .section { margin-bottom: 25px; }
-          .section-title { font-size: 14px; font-weight: bold; text-transform: uppercase; color: #6b7280; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px; }
+          @page { size: A4; margin: 0.5cm; }
+          body { font-family: 'Segoe UI', sans-serif; color: #1f2937; line-height: 1.2; font-size: 13px; }
+          .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+          .logo { font-size: 20px; font-weight: bold; color: #2563eb; display:flex; align-items:center; gap: 10px; }
+          .logo img { height: 35px; }
+          .order-id { font-size: 16px; color: #4b5563; }
+          .section { margin-bottom: 10px; }
+          .section-title { font-size: 13px; font-weight: bold; text-transform: uppercase; color: #6b7280; border-bottom: 1px solid #eee; padding-bottom: 3px; margin-bottom: 5px; }
           
-          .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-          .info-group { margin-bottom: 8px; }
-          .label { font-weight: 600; color: #374151; font-size: 13px; }
-          .value { color: #111827; font-size: 14px; }
+          .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+          .info-group { margin-bottom: 3px; }
+          .label { font-weight: 600; color: #374151; font-size: 12px; }
+          .value { color: #111827; font-size: 13px; }
 
           .photos-grid { 
             display: grid; 
-            grid-template-columns: repeat(3, 1fr); 
-            gap: 15px; 
-            margin-top: 15px;
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 8px; 
+            margin-top: 5px;
           }
           .photo-container { 
             border: 1px solid #e5e7eb; 
-            border-radius: 8px; 
+            border-radius: 4px; 
             overflow: hidden; 
-            height: 300px; /* Fixed height for uniformity */
+            height: 100px; 
             background: #f9fafb;
             display: flex;
             align-items: center;
@@ -473,16 +473,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           .photo-container img { 
             width: 100%; 
             height: 100%; 
-            object-fit: contain; /* Ensure full image is visible */
+            object-fit: contain; 
           }
 
-          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-          th { background-color: #f3f4f6; text-align: left; padding: 10px; font-size: 12px; font-weight: bold; color: #4b5563; border-bottom: 1px solid #e5e7eb; }
-          td { padding: 10px; border-bottom: 1px solid #f3f4f6; font-size: 14px; color: #1f2937; }
+          table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+          th { background-color: #f3f4f6; text-align: left; padding: 5px; font-size: 11px; font-weight: bold; color: #4b5563; border-bottom: 1px solid #e5e7eb; }
+          td { padding: 5px; border-bottom: 1px solid #f3f4f6; font-size: 12px; color: #1f2937; }
           .text-center { text-align: center; }
           
           .summary-box { 
-              margin-top: 20px; 
+              margin-top: 10px; 
               width: 50%; 
               border: 1px solid #e5e7eb;
           }
@@ -541,6 +541,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           </div>
         </div>
 
+        ${viewingOrder.photos && viewingOrder.photos.length > 0 ? `
+          <div class="section">
+            <div class="section-title">Fotos do Pedido</div>
+            <div class="photos-grid">
+              ${viewingOrder.photos.map(photo => `
+                <div class="photo-container">
+                  <img src="${photo}" />
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
         <div class="section">
           <div class="section-title">Produtos</div>
           <table>
@@ -565,7 +578,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
         <div class="section">
             <div class="summary-box">
-                <div class="section-title" style="border:none; padding: 10px; margin:0; background:#f3f4f6;">Resumo por Tamanho</div>
+                <div class="section-title" style="border:none; padding: 8px; margin:0; background:#f3f4f6;">Resumo por Tamanho</div>
                 <table style="margin:0;">
                     <thead>
                         <tr>
@@ -576,26 +589,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                     <tbody>
                         ${summaryRows}
                         <tr class="total-row">
-                            <td style="padding: 10px;">TOTAL DE ITENS</td>
-                            <td style="padding: 10px; text-align: center;">${totalItems}</td>
+                            <td style="padding: 8px;">TOTAL DE ITENS</td>
+                            <td style="padding: 8px; text-align: center;">${totalItems}</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </div>
-
-        ${viewingOrder.photos && viewingOrder.photos.length > 0 ? `
-          <div class="section">
-            <div class="section-title">Fotos do Pedido</div>
-            <div class="photos-grid">
-              ${viewingOrder.photos.map(photo => `
-                <div class="photo-container">
-                  <img src="${photo}" />
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
 
         <script>
           window.onload = function() { window.print(); }
@@ -1519,7 +1519,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
                 <div className="flex-1 overflow-y-auto p-6">
                     {/* Header Info */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div className="space-y-1">
                             <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Cliente</p>
                             <p className="text-lg font-medium text-gray-900">{viewingOrder.customerName}</p>
@@ -1560,15 +1560,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         </div>
                     </div>
                     
-                    {/* Photos (View Mode) */}
+                    {/* Photos (View Mode) - UPDATED LAYOUT */}
                     {viewingOrder.photos && viewingOrder.photos.length > 0 && (
-                        <div className="mb-6">
+                        <div className="mb-4">
                             <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Fotos Anexadas</p>
-                            <div className="flex gap-2 overflow-x-auto pb-2">
+                            <div className="grid grid-cols-4 gap-2">
                                 {viewingOrder.photos.map((photo, idx) => (
                                     <div 
                                         key={idx} 
-                                        className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer hover:opacity-80 transition flex-shrink-0"
+                                        className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 cursor-pointer hover:opacity-80 transition"
                                         onClick={() => setExpandedImage(photo)}
                                     >
                                         <img src={photo} alt="Miniatura" className="w-full h-full object-cover" />
@@ -1579,7 +1579,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                     )}
 
                     {/* Products Table */}
-                    <div className="bg-gray-50 rounded-xl overflow-hidden mb-6 border border-gray-200">
+                    <div className="bg-gray-50 rounded-xl overflow-hidden mb-4 border border-gray-200">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-100">
                                 <tr>
