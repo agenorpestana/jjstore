@@ -627,27 +627,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   const formatDatePTBR = (dateStr?: string) => {
       if (!dateStr) return '-';
       
+      // 1. Prioridade: Se for formato YYYY-MM-DD (padrão do input date), faz split manual
+      // Isso evita problemas de Timezone (ex: 01/02 virar 31/01 21:00)
+      if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [y, m, d] = dateStr.split('-');
+          return `${d}/${m}/${y}`;
+      }
+
+      // 2. Fallback: Tenta parsear data completa, retornando apenas a data (sem hora)
       try {
           const date = new Date(dateStr);
-          // Verifica se é uma data válida e se o parsing funcionou
           if (!isNaN(date.getTime())) {
-              return date.toLocaleString('pt-BR', { 
-                  day: '2-digit', 
-                  month: '2-digit', 
-                  year: 'numeric', 
-                  hour: '2-digit', 
-                  minute: '2-digit' 
-              });
+              return date.toLocaleDateString('pt-BR');
           }
       } catch (e) {
           console.error("Erro ao formatar data:", e);
       }
 
-      // Fallback para string simples YYYY-MM-DD
-      if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          const [y, m, d] = dateStr.split('-');
-          return `${d}/${m}/${y}`;
-      }
       return dateStr;
   };
 

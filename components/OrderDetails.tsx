@@ -29,18 +29,21 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
 
   const formatDatePTBR = (dateStr?: string) => {
       if (!dateStr) return '';
+      
+      // 1. Prioridade: Se for formato YYYY-MM-DD (padrão do input date), faz split manual
+      // Isso evita problemas de Timezone (ex: 01/02 virar 31/01 21:00)
+      if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [y, m, d] = dateStr.split('-');
+          return `${d}/${m}/${y}`;
+      }
+
       try {
-          // If already in PT-BR format or simple string
+          // If already in PT-BR format or simple string with slash
           if (dateStr.includes('/')) return dateStr;
           
           const date = new Date(dateStr);
           if (!isNaN(date.getTime())) {
               return date.toLocaleDateString('pt-BR');
-          }
-          // Fallback if generic string YYYY-MM-DD
-          if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-              const [y, m, d] = dateStr.split('-');
-              return `${d}/${m}/${y}`;
           }
       } catch (e) { }
       return dateStr;
