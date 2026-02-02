@@ -242,6 +242,7 @@ export const createOrder = async (input: NewOrderInput): Promise<Order> => {
     total,
     photos: input.photos || [],
     pressingDate: input.pressingDate,
+    printingDate: input.printingDate, // Add field
     seamstress: input.seamstress,
     items: input.items.map((item, idx) => ({
       ...item,
@@ -300,6 +301,7 @@ export const updateOrderFull = async (id: string, input: NewOrderInput): Promise
         downPayment: input.downPayment,
         photos: input.photos || [],
         pressingDate: input.pressingDate,
+        printingDate: input.printingDate, // Add field
         seamstress: input.seamstress,
         total: total,
         items: input.items.map((item, idx) => ({

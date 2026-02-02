@@ -155,6 +155,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     photos: [],
     items: [],
     pressingDate: '',
+    printingDate: '', // Initialize
     seamstress: ''
   });
   const [tempItem, setTempItem] = useState({ name: '', size: '', price: '', quantity: '1' });
@@ -164,7 +165,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         customerName: '', customerPhone: '', shippingAddress: '', 
         orderDate: new Date().toISOString().split('T')[0], estimatedDelivery: '',
         paymentMethod: 'Pix', downPayment: 0, photos: [], items: [],
-        pressingDate: '', seamstress: ''
+        pressingDate: '', printingDate: '', seamstress: ''
     });
     setTempItem({ name: '', size: '', price: '', quantity: '1' });
     setIsEditingFullOrder(null);
@@ -177,8 +178,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
   const handleOpenEditOrder = (order: Order) => {
       // Parse dates back to YYYY-MM-DD for input fields if possible
-      const parseDateToInput = (dateStr: string) => {
-          if (dateStr && dateStr.includes('/')) {
+      const parseDateToInput = (dateStr?: string) => {
+          if (!dateStr) return '';
+          if (dateStr.includes('/')) {
               const [d, m, y] = dateStr.split('/');
               return `${y}-${m}-${d}`;
           }
@@ -195,6 +197,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           downPayment: order.downPayment,
           photos: order.photos || [],
           pressingDate: order.pressingDate || '',
+          printingDate: order.printingDate || '',
           seamstress: order.seamstress || '',
           items: order.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity }))
       });
@@ -527,6 +530,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
               </div>
               <div class="info-group">
                 <span class="label">Prensagem:</span> <span class="value">${formatDatePTBR(viewingOrder.pressingDate) || '-'}</span>
+              </div>
+              <div class="info-group">
+                <span class="label">Impressão:</span> <span class="value">${formatDatePTBR(viewingOrder.printingDate) || '-'}</span>
               </div>
               <div class="info-group">
                 <span class="label">Costureira:</span> <span class="value">${viewingOrder.seamstress || '-'}</span>
@@ -1271,7 +1277,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                       <h4 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
                           <Shirt size={18} /> Dados de Produção
                       </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Data de Prensagem</label>
                             <input 
@@ -1293,6 +1299,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                 onChange={e => setOrderForm({...orderForm, seamstress: e.target.value})}
                                 />
                             </div>
+                        </div>
+                      </div>
+                      
+                      {/* Novo Campo: Data de Impressão */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Data de Impressão</label>
+                            <input 
+                            type="date" 
+                            className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
+                            value={orderForm.printingDate || ''}
+                            onChange={e => setOrderForm({...orderForm, printingDate: e.target.value})}
+                            />
                         </div>
                       </div>
                   </div>
@@ -1525,6 +1544,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                 <div className="flex justify-between md:justify-end gap-2 text-sm text-gray-700">
                                     <span>Prensagem:</span>
                                     <span className="font-medium">{formatDatePTBR(viewingOrder.pressingDate)}</span>
+                                </div>
+                             )}
+                             {(viewingOrder.printingDate) && (
+                                <div className="flex justify-between md:justify-end gap-2 text-sm text-gray-700">
+                                    <span>Impressão:</span>
+                                    <span className="font-medium">{formatDatePTBR(viewingOrder.printingDate)}</span>
                                 </div>
                              )}
                               {(viewingOrder.seamstress) && (

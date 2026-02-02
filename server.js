@@ -86,6 +86,7 @@ async function initDB() {
         paymentMethod VARCHAR(100),
         shippingAddress TEXT,
         pressingDate VARCHAR(20),
+        printingDate VARCHAR(20),
         seamstress VARCHAR(100),
         currentStatus VARCHAR(50),
         FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
@@ -134,6 +135,7 @@ async function initDB() {
     // --- MIGRATION CHECK ---
     const migrationQueries = [
        "ALTER TABLE orders ADD COLUMN pressingDate VARCHAR(20)",
+       "ALTER TABLE orders ADD COLUMN printingDate VARCHAR(20)",
        "ALTER TABLE orders ADD COLUMN seamstress VARCHAR(100)",
        "ALTER TABLE order_items ADD COLUMN size VARCHAR(20)",
        "ALTER TABLE orders ADD COLUMN company_id VARCHAR(50)",
@@ -152,7 +154,7 @@ async function initDB() {
         try {
             await pool.query(query);
         } catch (e) {
-            // Ignora erros
+            // Ignora erros se coluna já existe
         }
     }
 
@@ -724,9 +726,9 @@ app.post('/api/orders', async (req, res) => {
     const order = req.body;
 
     await conn.query(
-      `INSERT INTO orders (id, company_id, customerName, customerPhone, orderDate, estimatedDelivery, total, downPayment, paymentMethod, shippingAddress, pressingDate, seamstress, currentStatus)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [order.id, companyId, order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.seamstress, order.currentStatus]
+      `INSERT INTO orders (id, company_id, customerName, customerPhone, orderDate, estimatedDelivery, total, downPayment, paymentMethod, shippingAddress, pressingDate, printingDate, seamstress, currentStatus)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [order.id, companyId, order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.currentStatus]
     );
 
     if (order.items && order.items.length > 0) {
@@ -764,8 +766,8 @@ app.put('/api/orders/:id', async (req, res) => {
     const order = req.body;
 
     await conn.query(
-      `UPDATE orders SET customerName=?, customerPhone=?, orderDate=?, estimatedDelivery=?, total=?, downPayment=?, paymentMethod=?, shippingAddress=?, pressingDate=?, seamstress=? WHERE id=?`,
-      [order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.seamstress, orderId]
+      `UPDATE orders SET customerName=?, customerPhone=?, orderDate=?, estimatedDelivery=?, total=?, downPayment=?, paymentMethod=?, shippingAddress=?, pressingDate=?, printingDate=?, seamstress=? WHERE id=?`,
+      [order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, orderId]
     );
 
     await conn.query('DELETE FROM order_items WHERE order_id = ?', [orderId]);

@@ -27,6 +27,25 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
 
   const { summary, totalItems } = getSizeSummary();
 
+  const formatDatePTBR = (dateStr?: string) => {
+      if (!dateStr) return '';
+      try {
+          // If already in PT-BR format or simple string
+          if (dateStr.includes('/')) return dateStr;
+          
+          const date = new Date(dateStr);
+          if (!isNaN(date.getTime())) {
+              return date.toLocaleDateString('pt-BR');
+          }
+          // Fallback if generic string YYYY-MM-DD
+          if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+              const [y, m, d] = dateStr.split('-');
+              return `${d}/${m}/${y}`;
+          }
+      } catch (e) { }
+      return dateStr;
+  }
+
   return (
     <div className="space-y-6">
       {/* Info Grid */}
@@ -56,6 +75,9 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
                 <div className="flex flex-col gap-1">
                     <p className="text-gray-600 text-sm">Pedido: <span className="text-gray-800 font-medium">{order.orderDate}</span></p>
                     <p className="text-gray-600 text-sm">Entrega: <span className="text-gray-800 font-medium">{order.estimatedDelivery}</span></p>
+                    {order.printingDate && (
+                        <p className="text-gray-600 text-sm">Impressão: <span className="text-gray-800 font-medium">{formatDatePTBR(order.printingDate)}</span></p>
+                    )}
                 </div>
             </div>
         </div>
@@ -113,7 +135,7 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
              </div>
              <div className="flex justify-between text-lg pt-2 border-t border-gray-200">
                  <span className="text-gray-900 font-bold">Saldo Restante</span>
-                 <span className={`${remainingBalance > 0 ? 'text-red-600' : 'text-green-600'} font-bold`}>
+                 <span className={`${remainingBalance > 0.01 ? 'text-red-600' : 'text-green-600'} font-bold`}>
                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(remainingBalance)}
                  </span>
              </div>

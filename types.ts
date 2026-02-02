@@ -39,6 +39,7 @@ export interface Order {
   timeline: StatusEvent[];
   shippingAddress: string;
   pressingDate?: string;
+  printingDate?: string; // Novo campo
   seamstress?: string;
 }
 
@@ -52,6 +53,7 @@ export interface NewOrderInput {
   downPayment: number;
   photos: string[];
   pressingDate?: string;
+  printingDate?: string; // Novo campo
   seamstress?: string;
   items: Omit<OrderItem, 'id' | 'image'>[];
 }
