@@ -605,14 +605,17 @@ app.get('/api/settings', async (req, res) => {
             query += ' WHERE company_id = ?';
             params.push(companyId);
         } else {
-            return res.json({ appName: 'Rastreaê', logoUrl: '' });
+            return res.json({ appName: 'Rastreaê', logoUrl: '', businessName: '', cnpj: '', city: '' });
         }
 
         const [rows] = await pool.query(query, params);
-        const settings = { appName: 'Rastreaê', logoUrl: '' };
+        const settings = { appName: 'Rastreaê', logoUrl: '', businessName: '', cnpj: '', city: '' };
         rows.forEach(row => {
             if (row.setting_key === 'appName') settings.appName = row.setting_value;
             if (row.setting_key === 'logoUrl') settings.logoUrl = row.setting_value;
+            if (row.setting_key === 'businessName') settings.businessName = row.setting_value;
+            if (row.setting_key === 'cnpj') settings.cnpj = row.setting_value;
+            if (row.setting_key === 'city') settings.city = row.setting_value;
         });
         res.json(settings);
     } catch (err) {
@@ -626,10 +629,17 @@ app.post('/api/settings', async (req, res) => {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(401).json({ error: 'Company ID required' });
 
-        const { appName, logoUrl } = req.body;
+        const { appName, logoUrl, businessName, cnpj, city } = req.body;
         
-        await pool.query('INSERT INTO app_settings (setting_key, setting_value, company_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = ?', ['appName', appName, companyId, appName]);
-        await pool.query('INSERT INTO app_settings (setting_key, setting_value, company_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = ?', ['logoUrl', logoUrl, companyId, logoUrl]);
+        const upsert = async (key, val) => {
+             await pool.query('INSERT INTO app_settings (setting_key, setting_value, company_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = ?', [key, val, companyId, val]);
+        }
+
+        await upsert('appName', appName);
+        await upsert('logoUrl', logoUrl);
+        await upsert('businessName', businessName || '');
+        await upsert('cnpj', cnpj || '');
+        await upsert('city', city || '');
         
         res.json({ message: 'Settings updated' });
     } catch (err) {

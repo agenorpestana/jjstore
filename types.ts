@@ -89,6 +89,9 @@ export interface NewEmployeeInput {
 export interface AppSettings {
   appName: string;
   logoUrl: string | null;
+  businessName?: string;
+  cnpj?: string;
+  city?: string;
 }
 
 export interface Plan {

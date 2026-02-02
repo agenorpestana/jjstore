@@ -960,7 +960,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                             <Settings className="text-primary" size={20} /> Configurações do Sistema
                         </h2>
-                        <p className="text-sm text-gray-500 mt-1">Personalize a identidade visual do seu aplicativo.</p>
+                        <p className="text-sm text-gray-500 mt-1">Personalize a identidade visual e dados da sua empresa.</p>
                     </div>
                     <div className="p-8 space-y-6">
                         <div>
@@ -972,6 +972,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                 onChange={e => setSettingsForm({...settingsForm, appName: e.target.value})}
                                 placeholder="Ex: Minha Empresa"
                             />
+                        </div>
+
+                         <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Razão Social</label>
+                            <input 
+                                type="text" 
+                                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:outline-none"
+                                value={settingsForm.businessName || ''}
+                                onChange={e => setSettingsForm({...settingsForm, businessName: e.target.value})}
+                                placeholder="Ex: Minha Empresa LTDA"
+                            />
+                        </div>
+
+                         <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">CNPJ</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:outline-none"
+                                    value={settingsForm.cnpj || ''}
+                                    onChange={e => setSettingsForm({...settingsForm, cnpj: e.target.value})}
+                                    placeholder="00.000.000/0000-00"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Cidade</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:outline-none"
+                                    value={settingsForm.city || ''}
+                                    onChange={e => setSettingsForm({...settingsForm, city: e.target.value})}
+                                    placeholder="Ex: São Paulo"
+                                />
+                            </div>
                         </div>
 
                         <div>
