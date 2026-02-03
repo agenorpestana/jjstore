@@ -46,12 +46,8 @@ function App() {
   // Load Settings on Mount & Restore Session
   const initializeApp = async () => {
     try {
-        // 1. Load Settings
-        const settings = await getAppSettings();
-        setAppSettings(settings);
-        document.title = `${settings.appName} - Acompanhamento de Pedidos`;
-
-        // 2. Restore User Session (Persistence)
+        // 1. Restore User Session (Persistence) FIRST
+        // Isso é crucial: precisamos definir o contexto da empresa ANTES de buscar as configurações
         const storedUser = localStorage.getItem('rastreae_user');
         if (storedUser) {
             const user = JSON.parse(storedUser);
@@ -63,6 +59,11 @@ function App() {
             }
             setCurrentUser(user);
         }
+
+        // 2. Load Settings (Agora com o header x-company-id correto se estiver logado)
+        const settings = await getAppSettings();
+        setAppSettings(settings);
+        document.title = `${settings.appName} - Acompanhamento de Pedidos`;
 
         // 3. Restore Order from URL (Persistence)
         const params = new URLSearchParams(window.location.search);
@@ -159,7 +160,9 @@ function App() {
               localStorage.setItem('rastreae_user', JSON.stringify(user));
               setShowLoginModal(false);
               setLoginForm({ login: '', password: '' });
-              initializeApp(); // Reload settings just in case
+              // Recarrega configurações agora que temos o contexto do usuário
+              const settings = await getAppSettings();
+              setAppSettings(settings);
           }
       } catch (err: any) {
           setLoginError(err.message || 'Login ou senha inválidos.');
@@ -220,7 +223,11 @@ function App() {
             currentUser={currentUser} 
             onLogout={handleLogout}
             appSettings={appSettings}
-            onUpdateSettings={initializeApp}
+            onUpdateSettings={async () => {
+                // Ao atualizar configurações, busca novamente do servidor
+                const settings = await getAppSettings();
+                setAppSettings(settings);
+            }}
         />
     );
   }
