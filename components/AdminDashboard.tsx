@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart, Copy } from 'lucide-react';
+import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart, Copy, Check } from 'lucide-react';
 import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings } from '../types';
 import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, updateOrderPayments } from '../services/mockData';
 
@@ -158,7 +158,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     printingDate: '', // Initialize
     seamstress: ''
   });
+  
+  // Item Editing State
   const [tempItem, setTempItem] = useState({ name: '', size: '', price: '', quantity: '1' });
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
 
   const resetOrderForm = () => {
       setOrderForm({
@@ -168,6 +171,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         pressingDate: '', printingDate: '', seamstress: ''
     });
     setTempItem({ name: '', size: '', price: '', quantity: '1' });
+    setEditingItemIndex(null);
     setIsEditingFullOrder(null);
   }
 
@@ -225,20 +229,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       setShowOrderModal(true);
   }
 
-  const handleAddItem = () => {
+  const handleSaveItem = () => {
     if (!tempItem.name || !tempItem.price) return;
-    setOrderForm(prev => ({
-      ...prev,
-      items: [...prev.items, { name: tempItem.name, size: tempItem.size, price: Number(tempItem.price), quantity: Number(tempItem.quantity) }]
-    }));
+    
+    const newItem = { 
+        name: tempItem.name, 
+        size: tempItem.size, 
+        price: Number(tempItem.price), 
+        quantity: Number(tempItem.quantity) 
+    };
+
+    setOrderForm(prev => {
+        const currentItems = [...prev.items];
+        if (editingItemIndex !== null) {
+            // Update existing
+            currentItems[editingItemIndex] = newItem;
+        } else {
+            // Add new
+            currentItems.push(newItem);
+        }
+        return { ...prev, items: currentItems };
+    });
+
+    // Reset input states
     setTempItem({ name: '', size: '', price: '', quantity: '1' });
+    setEditingItemIndex(null);
   };
+
+  const handleEditItem = (index: number) => {
+      const itemToEdit = orderForm.items[index];
+      setTempItem({
+          name: itemToEdit.name,
+          size: itemToEdit.size || '',
+          price: itemToEdit.price.toString(),
+          quantity: itemToEdit.quantity.toString()
+      });
+      setEditingItemIndex(index);
+  }
+
+  const handleCancelEditItem = () => {
+      setTempItem({ name: '', size: '', price: '', quantity: '1' });
+      setEditingItemIndex(null);
+  }
 
   const handleRemoveItem = (index: number) => {
       setOrderForm(prev => ({
           ...prev,
           items: prev.items.filter((_, i) => i !== index)
       }));
+      // Se estiver editando o item que foi excluído, cancela a edição
+      if (editingItemIndex === index) {
+          handleCancelEditItem();
+      }
   }
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1519,26 +1561,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                     value={tempItem.quantity}
                     onChange={e => setTempItem({...tempItem, quantity: e.target.value})}
                   />
-                  <button 
-                    onClick={handleAddItem}
-                    className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2.5 rounded-lg"
-                  >
-                    <Plus size={20} />
-                  </button>
+                  <div className="flex gap-1">
+                    <button 
+                        onClick={handleSaveItem}
+                        className={`p-2.5 rounded-lg text-white transition ${editingItemIndex !== null ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}
+                        title={editingItemIndex !== null ? "Salvar Alteração" : "Adicionar Item"}
+                    >
+                        {editingItemIndex !== null ? <Check size={20} /> : <Plus size={20} />}
+                    </button>
+                    {editingItemIndex !== null && (
+                        <button 
+                            onClick={handleCancelEditItem}
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2.5 rounded-lg"
+                            title="Cancelar Edição"
+                        >
+                            <X size={20} />
+                        </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Items List */}
                 <div className="bg-gray-50 rounded-lg p-3 space-y-2 max-h-32 overflow-y-auto">
                   {orderForm.items.length === 0 && <p className="text-xs text-center text-gray-400">Nenhum item adicionado</p>}
                   {orderForm.items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-sm items-center bg-white p-2 rounded shadow-sm">
+                    <div key={idx} className={`flex justify-between text-sm items-center bg-white p-2 rounded shadow-sm ${editingItemIndex === idx ? 'ring-2 ring-primary ring-offset-1' : ''}`}>
                       <div className="flex items-center gap-2">
                           <span className="text-gray-700">{item.quantity}x {item.name}</span>
                           {item.size && <span className="bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded font-medium">{item.size}</span>}
                       </div>
-                      <div className="flex items-center gap-4">
-                          <span className="font-medium">R$ {(item.price * item.quantity).toFixed(2)}</span>
-                          <button onClick={() => handleRemoveItem(idx)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
+                      <div className="flex items-center gap-2">
+                          <span className="font-medium mr-2">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                          <button 
+                            onClick={() => handleEditItem(idx)}
+                            className="text-blue-400 hover:text-blue-600 p-1 hover:bg-blue-50 rounded"
+                            title="Editar Item"
+                          >
+                              <Edit2 size={14} />
+                          </button>
+                          <button onClick={() => handleRemoveItem(idx)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded">
+                              <X size={14} />
+                          </button>
                       </div>
                     </div>
                   ))}
