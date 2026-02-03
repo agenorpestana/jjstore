@@ -516,6 +516,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
               border-top: 2px solid #e5e7eb;
           }
 
+          /* DECLARAÇÃO DE RECEBIMENTO */
+          .print-footer {
+              margin-top: 40px;
+              border-top: 1px dashed #ccc;
+              padding-top: 20px;
+              page-break-inside: avoid;
+          }
+          .declaration-title {
+              font-weight: bold;
+              text-align: center;
+              font-size: 14px;
+              margin-bottom: 15px;
+              text-transform: uppercase;
+          }
+          .declaration-text {
+              font-size: 12px;
+              line-height: 1.6;
+              text-align: justify;
+              margin-bottom: 30px;
+          }
+          .date-line {
+              text-align: right;
+              margin-bottom: 50px;
+              font-size: 12px;
+          }
+          .signature-line {
+              text-align: center;
+              font-size: 11px;
+              font-weight: bold;
+              border-top: 1px solid #000;
+              width: 80%;
+              margin: 0 auto;
+              padding-top: 5px;
+          }
+
           @media print {
             body { -webkit-print-color-adjust: exact; }
           }
@@ -618,6 +653,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <div class="print-footer">
+            <div class="declaration-title">DECLARAÇÃO DE RECEBIMENTO DE MERCADORIA</div>
+            <div class="declaration-text">
+                Recebi da Empresa <b>${appSettings.businessName || appSettings.appName}</b>, CNPJ: <b>${appSettings.cnpj || '____________________'}</b>,
+                o pedido <b>#${viewingOrder.id}</b> em conformidade com o pedido solicitado e em perfeito estado.
+                Confirmo que recebi todos os itens citados acima.
+            </div>
+            <div class="date-line">
+                ${appSettings.city || '________________'}, ____ de ____________________ de 20____.
+            </div>
+            <div class="signature-line">
+                ASSINATURA E CPF DO RECEBEDOR
             </div>
         </div>
 
