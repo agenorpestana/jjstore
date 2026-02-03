@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart } from 'lucide-react';
+import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart, Copy } from 'lucide-react';
 import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings } from '../types';
 import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, updateOrderPayments } from '../services/mockData';
 
@@ -202,6 +202,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           items: order.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity }))
       });
       setIsEditingFullOrder(order.id);
+      setShowOrderModal(true);
+  }
+
+  // --- NOVO: Função para Duplicar Pedido ---
+  const handleDuplicateOrder = (order: Order) => {
+      setOrderForm({
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          shippingAddress: order.shippingAddress,
+          orderDate: new Date().toISOString().split('T')[0], // Data de hoje
+          estimatedDelivery: '', // Limpa previsão
+          paymentMethod: 'Pix', // Reset financeiro
+          downPayment: 0, // Reset financeiro
+          photos: order.photos || [],
+          pressingDate: '',
+          printingDate: '',
+          seamstress: '',
+          items: order.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity }))
+      });
+      setIsEditingFullOrder(null); // Trata como um NOVO pedido
       setShowOrderModal(true);
   }
 
@@ -479,6 +499,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           table { width: 100%; border-collapse: collapse; margin-top: 5px; }
           th { background-color: #f3f4f6; text-align: left; padding: 5px; font-size: 11px; font-weight: bold; color: #4b5563; border-bottom: 1px solid #e5e7eb; }
           td { padding: 5px; border-bottom: 1px solid #f3f4f6; font-size: 12px; color: #1f2937; }
+          
+          /* EFEITO ZEBRA PARA CONFERÊNCIA */
+          tbody tr:nth-child(even) { background-color: #f9fafb; }
+          
           .text-center { text-align: center; }
           
           .summary-box { 
@@ -836,6 +860,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                                 className="text-gray-500 hover:text-orange-600 bg-gray-100 hover:bg-orange-50 p-2 rounded-lg transition"
                                             >
                                                 <Edit2 size={18} />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDuplicateOrder(order)}
+                                                title="Duplicar Pedido"
+                                                className="text-gray-500 hover:text-purple-600 bg-gray-100 hover:bg-purple-50 p-2 rounded-lg transition"
+                                            >
+                                                <Copy size={18} />
                                             </button>
                                             <button 
                                                 onClick={() => setManagingStatusOrder(order)}
@@ -1474,7 +1505,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         </div>
       )}
 
-      {/* ... (Existing Status Modal - Keep as is) ... */}
+      {/* ... (Restante do componente permanece igual) ... */}
       {managingStatusOrder && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
@@ -1516,7 +1547,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 ))}
               </div>
 
-              {/* Optional Location Input for Shipping */}
               <div className="mt-4">
                 <label className="block text-xs text-gray-500 mb-1">Observação de Status (Opcional)</label>
                 <div className="flex items-center gap-2">
@@ -1535,7 +1565,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         </div>
       )}
 
-      {/* --- MODAL: VIEW ORDER (VISUALIZAR) --- */}
       {viewingOrder && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -1552,7 +1581,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6">
-                    {/* Header Info */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div className="space-y-1">
                             <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Cliente</p>
@@ -1594,7 +1622,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         </div>
                     </div>
                     
-                    {/* Photos (View Mode) - UPDATED LAYOUT */}
                     {viewingOrder.photos && viewingOrder.photos.length > 0 && (
                         <div className="mb-4">
                             <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Fotos Anexadas</p>
@@ -1612,7 +1639,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         </div>
                     )}
 
-                    {/* Products Table */}
                     <div className="bg-gray-50 rounded-xl overflow-hidden mb-4 border border-gray-200">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-100">
@@ -1626,7 +1652,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {viewingOrder.items.map((item, idx) => (
-                                    <tr key={idx}>
+                                    <tr key={idx} className="even:bg-white odd:bg-gray-50/50">
                                         <td className="px-4 py-3 text-sm text-gray-900 flex items-center gap-2">
                                             <div className="w-8 h-8 rounded border border-gray-200 bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
                                                 {appSettings.logoUrl ? (
@@ -1651,7 +1677,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         </table>
                     </div>
 
-                    {/* Quantity Summary */}
                     <div className="flex justify-end mb-6">
                         <div className="w-full md:w-1/2 bg-white rounded-xl border border-gray-200 overflow-hidden">
                              <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
@@ -1674,14 +1699,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         </div>
                     </div>
 
-                    {/* Financial Summary */}
                     <div className="border-t border-gray-100 pt-6">
                         <h4 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
                              <DollarSign size={18} /> Resumo Financeiro Detalhado
                         </h4>
                         <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 space-y-4">
                              <div className="flex flex-col md:flex-row justify-between gap-6">
-                                 {/* Totals */}
                                  <div className="flex-1 space-y-2">
                                      <div className="flex justify-between items-center text-sm">
                                          <span className="text-gray-600">Total do Pedido:</span>
@@ -1703,7 +1726,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                      </div>
                                  </div>
                                  
-                                 {/* Payment Method Details */}
                                  <div className="flex-1 border-l border-gray-200 pl-6">
                                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Histórico de Pagamento</p>
                                     <div className="bg-white p-3 rounded-lg border border-gray-200 text-sm text-gray-700 space-y-1">
@@ -1732,7 +1754,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                  </div>
                              </div>
 
-                             {/* Payment Action */}
                              {(viewingOrder.total - viewingOrder.downPayment) > 0.01 && (
                                  <div className="pt-4 border-t border-gray-200">
                                      <label className="block text-xs font-medium text-blue-800 mb-2">Adicionar Pagamento (Baixa):</label>
@@ -1792,7 +1813,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 </div>
             </div>
             
-            {/* Inner Lightbox for View Modal */}
             {expandedImage && (
                 <div 
                     className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 p-4 animate-in fade-in duration-200"
