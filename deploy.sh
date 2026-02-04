@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 # Cores para output
@@ -39,6 +40,31 @@ if [ -d "$APP_DIR" ]; then
     echo "Reiniciando aplicação..."
     # Isso vai disparar o server.js que contem a lógica de atualização do DB (migration)
     pm2 restart rastreae-app
+
+    # Atualizar Nginx config caso tenha mudado
+    echo "Atualizando configuração do Nginx..."
+    NGINX_CONF="/etc/nginx/sites-available/$DOMAIN_NAME"
+    cat > $NGINX_CONF <<EOF
+server {
+    listen 80;
+    server_name $DOMAIN_NAME;
+
+    # Aumenta limite de upload para evitar Erro 413
+    client_max_body_size 200M;
+
+    location / {
+        proxy_pass http://localhost:3002;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
+}
+EOF
+    nginx -t && systemctl reload nginx
     
     echo -e "${GREEN}=== ATUALIZAÇÃO CONCLUÍDA! ===${NC}"
 
@@ -125,6 +151,9 @@ EOF
 server {
     listen 80;
     server_name $DOMAIN_NAME;
+
+    # Aumenta limite de upload para evitar Erro 413
+    client_max_body_size 200M;
 
     location / {
         proxy_pass http://localhost:3002;

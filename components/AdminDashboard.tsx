@@ -290,6 +290,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (files && files[0]) {
+          // Check file size (e.g., limit to 10MB per file client-side)
+          if (files[0].size > 10 * 1024 * 1024) {
+              alert('A imagem é muito grande (Máx 10MB). Por favor, comprima a imagem antes de enviar.');
+              e.target.value = '';
+              return;
+          }
+
           // Increase limit to 6
           if (orderForm.photos.length >= 6) {
               alert('Máximo de 6 fotos permitidas.');
