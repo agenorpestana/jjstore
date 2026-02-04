@@ -133,6 +133,14 @@ export const manualRenewCompany = async (id: string): Promise<void> => {
     await handleResponse(response);
 }
 
+export const revokeCompanyMonth = async (id: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/saas/companies/${id}/revoke-month`, {
+        method: 'POST',
+        headers: getHeaders()
+    });
+    await handleResponse(response);
+}
+
 export const deleteCompany = async (id: string): Promise<void> => {
     const response = await fetch(`${API_URL}/saas/companies/${id}`, {
         method: 'DELETE',

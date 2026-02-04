@@ -531,6 +531,30 @@ app.post('/api/saas/companies/:id/renew', async (req, res) => {
     }
 });
 
+// NOVO: Revogar 1 mês (diminuir)
+app.post('/api/saas/companies/:id/revoke-month', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [rows] = await pool.query("SELECT next_payment_due FROM companies WHERE id = ?", [id]);
+        if (rows.length === 0) return res.status(404).json({ error: "Empresa não encontrada" });
+
+        // Se next_payment_due for null, usa NOW como base, senão usa a data existente
+        const currentDue = rows[0].next_payment_due ? new Date(rows[0].next_payment_due) : new Date();
+        
+        // Subtrai 30 dias
+        currentDue.setDate(currentDue.getDate() - 30);
+
+        await pool.query(
+            "UPDATE companies SET next_payment_due = ? WHERE id = ?",
+            [currentDue, id]
+        );
+
+        res.json({ message: '1 mês removido com sucesso' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // NOVO: Excluir empresa com validação de pedidos
 app.delete('/api/saas/companies/:id', async (req, res) => {
     try {

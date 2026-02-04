@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Building, X, Search, Shield, LogOut, LayoutList, Plus, Edit2, Trash2, CheckCircle, Ban, Phone, User, Calendar, CreditCard, Settings, Save, DollarSign, Eye, EyeOff } from 'lucide-react';
+import { Building, X, Search, Shield, LogOut, LayoutList, Plus, Edit2, Trash2, CheckCircle, Ban, Phone, User, Calendar, CreditCard, Settings, Save, DollarSign, Eye, EyeOff, Minus } from 'lucide-react';
 import { Employee, Company, Plan } from '../types';
-import { getCompanies, updateCompanyStatus, getPlans, createPlan, updatePlan, deletePlan, registerCompany, getSaasSettings, saveSaasSettings, manualRenewCompany, deleteCompany, togglePlanVisibility } from '../services/mockData';
+import { getCompanies, updateCompanyStatus, getPlans, createPlan, updatePlan, deletePlan, registerCompany, getSaasSettings, saveSaasSettings, manualRenewCompany, deleteCompany, togglePlanVisibility, revokeCompanyMonth } from '../services/mockData';
 
 interface SuperAdminDashboardProps {
   currentUser: Employee;
@@ -92,6 +92,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
               fetchCompanies();
           } catch (e: any) {
               alert(e.message || 'Erro ao renovar.');
+          }
+      }
+  }
+
+  const handleRevokeMonth = async (id: string, name: string) => {
+      if (window.confirm(`ATENÇÃO: Deseja REMOVER 30 dias da assinatura de ${name}?\n\nUse apenas em caso de erro.`)) {
+          try {
+              await revokeCompanyMonth(id);
+              alert('1 mês removido com sucesso!');
+              fetchCompanies();
+          } catch (e: any) {
+              alert(e.message || 'Erro ao remover mês.');
           }
       }
   }
@@ -277,10 +289,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
                                           <div className="flex justify-end gap-2">
                                               <button
                                                   onClick={() => handleManualRenew(company.id, company.name)}
-                                                  title="Renovar Manualmente (Dinheiro)"
+                                                  title="Adicionar 1 Mês (Renovar Manualmente)"
                                                   className="p-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition"
                                               >
                                                   <DollarSign size={16} />
+                                              </button>
+
+                                               <button
+                                                  onClick={() => handleRevokeMonth(company.id, company.name)}
+                                                  title="Remover 1 Mês (Correção)"
+                                                  className="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition"
+                                              >
+                                                  <Minus size={16} />
                                               </button>
                                               
                                               <button 
