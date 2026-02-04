@@ -50,6 +50,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   const [isEditingFullOrder, setIsEditingFullOrder] = useState<string | null>(null); // ID of order being edited
   const [showNewEmployeeModal, setShowNewEmployeeModal] = useState(false);
   
+  // Loading state specifically for submitting the order form (to handle big images)
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Status & View Modals
   const [managingStatusOrder, setManagingStatusOrder] = useState<Order | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
@@ -173,6 +176,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     setTempItem({ name: '', size: '', price: '', quantity: '1' });
     setEditingItemIndex(null);
     setIsEditingFullOrder(null);
+    setIsSubmitting(false);
   }
 
   const handleOpenNewOrder = () => {
@@ -337,15 +341,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         }
     }
 
-    if (isEditingFullOrder) {
-        await updateOrderFull(isEditingFullOrder, finalOrderForm);
-    } else {
-        await createOrder(finalOrderForm);
+    setIsSubmitting(true);
+    try {
+        if (isEditingFullOrder) {
+            await updateOrderFull(isEditingFullOrder, finalOrderForm);
+        } else {
+            await createOrder(finalOrderForm);
+        }
+        setShowOrderModal(false);
+        resetOrderForm();
+        refreshOrders();
+    } catch (err: any) {
+        alert("Erro ao salvar o pedido. Se estiver enviando muitas fotos, tente enviar menos ou em menor resolução.\n\nDetalhes: " + err.message);
+    } finally {
+        setIsSubmitting(false);
     }
-    
-    setShowOrderModal(false);
-    resetOrderForm();
-    refreshOrders();
   };
 
   // --- New Employee Logic ---
@@ -1610,8 +1620,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             </div>
             <div className="p-4 bg-gray-50 flex justify-end gap-2 border-t border-gray-100">
               <button onClick={() => setShowOrderModal(false)} className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg">Cancelar</button>
-              <button onClick={handleSubmitOrder} className="px-4 py-2 bg-primary text-white font-medium rounded-lg hover:bg-blue-700">
-                  {isEditingFullOrder ? 'Atualizar Pedido' : 'Criar Pedido'}
+              <button 
+                onClick={handleSubmitOrder} 
+                disabled={isSubmitting}
+                className={`px-4 py-2 bg-primary text-white font-medium rounded-lg hover:bg-blue-700 flex items-center gap-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+              >
+                  {isSubmitting ? (
+                    <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Processando...
+                    </>
+                  ) : (
+                    isEditingFullOrder ? 'Atualizar Pedido' : 'Criar Pedido'
+                  )}
               </button>
             </div>
           </div>

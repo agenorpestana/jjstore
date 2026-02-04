@@ -14,9 +14,9 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 
 app.use(cors());
-// Aumentando limite e aceitando urlencoded para garantir compatibilidade total com MP
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+// Aumentando limite para 200mb para permitir múltiplas fotos em alta resolução
+app.use(bodyParser.json({ limit: '200mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '200mb' }));
 
 app.use(express.static(path.join(__dirname, 'dist')));
 
