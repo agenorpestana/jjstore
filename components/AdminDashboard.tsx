@@ -532,11 +532,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         </tr>
     `).join('');
 
+    const isQuote = viewingOrder.currentStatus === OrderStatus.ORCAMENTO;
+
     const htmlContent = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>${viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Orçamento' : 'Pedido'} #${viewingOrder.id}</title>
+        <title>${isQuote ? 'Orçamento' : 'Pedido'} #${viewingOrder.id}</title>
         <style>
           @page { size: A4; margin: 0.5cm; }
           body { font-family: 'Segoe UI', sans-serif; color: #1f2937; line-height: 1.2; font-size: 13px; }
@@ -576,7 +578,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
              ${appSettings.logoUrl ? `<img src="${appSettings.logoUrl}" />` : ''}
              ${appSettings.appName}
           </div>
-          <div class="order-id">${viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Orçamento' : 'Pedido'} #${viewingOrder.id}</div>
+          <div class="order-id">${isQuote ? 'Orçamento' : 'Pedido'} #${viewingOrder.id}</div>
         </div>
 
         <div class="section">
@@ -594,15 +596,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
               </div>
             </div>
             <div>
-              <div class="section-title">${viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Detalhes' : 'Datas & Produção'}</div>
+              <div class="section-title">${isQuote ? 'Detalhes' : 'Datas & Produção'}</div>
               <div class="info-group">
                 <span class="label">Data:</span> <span class="value">${viewingOrder.orderDate}</span>
               </div>
               <div class="info-group">
-                <span class="label">${viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Prazo de Entrega:' : 'Previsão Entrega:'}</span> <span class="value">${viewingOrder.estimatedDelivery}</span>
+                <span class="label">${isQuote ? 'Prazo de Entrega:' : 'Previsão Entrega:'}</span> <span class="value">${viewingOrder.estimatedDelivery}</span>
               </div>
               
-              ${viewingOrder.currentStatus !== OrderStatus.ORCAMENTO ? `
+              ${!isQuote ? `
               <div class="info-group">
                 <span class="label">Prensagem:</span> <span class="value">${formatDatePTBR(viewingOrder.pressingDate) || '-'}</span>
               </div>
@@ -624,8 +626,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 <th>Produto</th>
                 <th class="text-center">Tamanho</th>
                 <th class="text-center">Qtd</th>
+                ${isQuote ? `
                 <th class="text-right">V. Unit</th>
                 <th class="text-right">Total</th>
+                ` : ''}
               </tr>
             </thead>
             <tbody>
@@ -634,8 +638,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                   <td>${item.name}</td>
                   <td class="text-center">${item.size || '-'}</td>
                   <td class="text-center">${item.quantity}</td>
+                  ${isQuote ? `
                   <td class="text-right">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price)}</td>
                   <td class="text-right">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price * item.quantity)}</td>
+                  ` : ''}
                 </tr>
               `).join('')}
             </tbody>
@@ -663,9 +669,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             </div>
         </div>
 
+        ${isQuote ? `
         <div class="finance-total-box">
             <strong>TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingOrder.total)}</strong>
         </div>
+        ` : ''}
 
         ${viewingOrder.photos && viewingOrder.photos.length > 0 ? `
           <div class="section">
@@ -680,11 +688,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           </div>
         ` : ''}
 
-        ${(viewingOrder.notes || (viewingOrder.currentStatus === OrderStatus.ORCAMENTO && viewingOrder.quoteValidity)) ? `
+        ${(viewingOrder.notes || (isQuote && viewingOrder.quoteValidity)) ? `
         <div class="section" style="margin-top: 20px;">
             <div class="section-title">Observações & Condições</div>
             <div style="border: 1px solid #e5e7eb; padding: 10px; font-size: 12px; background: #fcfcfc;">
-                ${viewingOrder.currentStatus === OrderStatus.ORCAMENTO && viewingOrder.quoteValidity ? `
+                ${isQuote && viewingOrder.quoteValidity ? `
                 <div style="margin-bottom: 8px;">
                     <strong>Validade da Proposta:</strong> ${viewingOrder.quoteValidity}
                 </div>` : ''}
@@ -697,7 +705,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         </div>
         ` : ''}
 
-        ${viewingOrder.currentStatus !== OrderStatus.ORCAMENTO ? `
+        ${!isQuote ? `
         <div class="print-footer">
             <div class="declaration-title">DECLARAÇÃO DE RECEBIMENTO DE MERCADORIA</div>
             <div class="declaration-text">
