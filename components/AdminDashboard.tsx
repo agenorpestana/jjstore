@@ -258,7 +258,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           seamstress: '',
           items: order.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity })),
           isQuote: order.currentStatus === OrderStatus.ORCAMENTO,
-          quoteValidity: '',
+          quoteValidity: order.quoteValidity || '', // Mantém validade se for orçamento
           notes: order.notes || ''
       });
       setIsEditingFullOrder(null); // Trata como um NOVO pedido
@@ -982,16 +982,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                             >
                                                 <Edit2 size={18} />
                                             </button>
-                                            {/* Hide Duplicate for Quotes to simplify */}
-                                            {activeTab === 'orders' && (
-                                                <button 
-                                                    onClick={() => handleDuplicateOrder(order)}
-                                                    title="Duplicar Pedido"
-                                                    className="text-gray-500 hover:text-purple-600 bg-gray-100 hover:bg-purple-50 p-2 rounded-lg transition"
-                                                >
-                                                    <Copy size={18} />
-                                                </button>
-                                            )}
+                                            <button 
+                                                onClick={() => handleDuplicateOrder(order)}
+                                                title={activeTab === 'quotes' ? "Duplicar Orçamento" : "Duplicar Pedido"}
+                                                className="text-gray-500 hover:text-purple-600 bg-gray-100 hover:bg-purple-50 p-2 rounded-lg transition"
+                                            >
+                                                <Copy size={18} />
+                                            </button>
                                             {activeTab === 'orders' && (
                                                 <button 
                                                     onClick={() => setManagingStatusOrder(order)}
@@ -1613,7 +1610,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                   <div className="flex gap-1">
                     <button 
                         onClick={handleSaveItem}
-                        className={`p-2.5 rounded-lg text-white transition ${editingItemIndex !== null ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}
+                        className={`p-2.5 rounded-lg text-white transition ${editingItemIndex !== null ? 'bg-green-500 hover:bg-green-600' : 'bg-blue-600 hover:bg-blue-700'}`}
                         title={editingItemIndex !== null ? "Salvar Alteração" : "Adicionar Item"}
                     >
                         {editingItemIndex !== null ? <Check size={20} /> : <Plus size={20} />}
