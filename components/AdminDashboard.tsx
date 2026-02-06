@@ -538,7 +538,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       <head>
         <title>${viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Orçamento' : 'Pedido'} #${viewingOrder.id}</title>
         <style>
-          /* ... styles omitted for brevity, reusing previous styles ... */
           @page { size: A4; margin: 0.5cm; }
           body { font-family: 'Segoe UI', sans-serif; color: #1f2937; line-height: 1.2; font-size: 13px; }
           .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
@@ -559,6 +558,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           td { padding: 5px; border-bottom: 1px solid #f3f4f6; font-size: 12px; color: #1f2937; }
           tbody tr:nth-child(even) { background-color: #f9fafb; }
           .text-center { text-align: center; }
+          .text-right { text-align: right; }
           .summary-box { margin-top: 10px; width: 50%; border: 1px solid #e5e7eb; }
           .total-row { background-color: #f9fafb; font-weight: bold; border-top: 2px solid #e5e7eb; }
           .print-footer { margin-top: 40px; border-top: 1px dashed #ccc; padding-top: 20px; page-break-inside: avoid; }
@@ -566,6 +566,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           .declaration-text { font-size: 12px; line-height: 1.6; text-align: justify; margin-bottom: 30px; }
           .date-line { text-align: right; margin-bottom: 50px; font-size: 12px; }
           .signature-line { text-align: center; font-size: 11px; font-weight: bold; border-top: 1px solid #000; width: 80%; margin: 0 auto; padding-top: 5px; }
+          .finance-total-box { margin-top: 20px; padding: 10px; background: #f3f4f6; border-radius: 4px; text-align: right; font-size: 14px; }
           @media print { body { -webkit-print-color-adjust: exact; } }
         </style>
       </head>
@@ -593,17 +594,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
               </div>
             </div>
             <div>
-              <div class="section-title">${viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Detalhes do Orçamento' : 'Datas & Produção'}</div>
+              <div class="section-title">${viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Detalhes' : 'Datas & Produção'}</div>
               <div class="info-group">
                 <span class="label">Data:</span> <span class="value">${viewingOrder.orderDate}</span>
               </div>
               <div class="info-group">
                 <span class="label">${viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Prazo de Entrega:' : 'Previsão Entrega:'}</span> <span class="value">${viewingOrder.estimatedDelivery}</span>
               </div>
-              ${viewingOrder.currentStatus === OrderStatus.ORCAMENTO && viewingOrder.quoteValidity ? `
-              <div class="info-group">
-                <span class="label">Validade:</span> <span class="value">${viewingOrder.quoteValidity}</span>
-              </div>` : ''}
               
               ${viewingOrder.currentStatus !== OrderStatus.ORCAMENTO ? `
               <div class="info-group">
@@ -619,26 +616,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           </div>
         </div>
 
-        ${viewingOrder.notes ? `
-        <div class="section">
-            <div class="section-title">Observações</div>
-            <div style="font-size: 12px; padding: 5px; border: 1px solid #eee; background: #fcfcfc;">${viewingOrder.notes}</div>
-        </div>
-        ` : ''}
-
-        ${viewingOrder.photos && viewingOrder.photos.length > 0 ? `
-          <div class="section">
-            <div class="section-title">Fotos</div>
-            <div class="photos-grid">
-              ${viewingOrder.photos.map(photo => `
-                <div class="photo-container">
-                  <img src="${photo}" />
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
-
         <div class="section">
           <div class="section-title">Produtos</div>
           <table>
@@ -647,6 +624,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 <th>Produto</th>
                 <th class="text-center">Tamanho</th>
                 <th class="text-center">Qtd</th>
+                <th class="text-right">V. Unit</th>
+                <th class="text-right">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -655,6 +634,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                   <td>${item.name}</td>
                   <td class="text-center">${item.size || '-'}</td>
                   <td class="text-center">${item.quantity}</td>
+                  <td class="text-right">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price)}</td>
+                  <td class="text-right">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price * item.quantity)}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -681,6 +662,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 </table>
             </div>
         </div>
+
+        <div class="finance-total-box">
+            <strong>TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingOrder.total)}</strong>
+        </div>
+
+        ${viewingOrder.photos && viewingOrder.photos.length > 0 ? `
+          <div class="section">
+            <div class="section-title">Fotos</div>
+            <div class="photos-grid">
+              ${viewingOrder.photos.map(photo => `
+                <div class="photo-container">
+                  <img src="${photo}" />
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        ${(viewingOrder.notes || (viewingOrder.currentStatus === OrderStatus.ORCAMENTO && viewingOrder.quoteValidity)) ? `
+        <div class="section" style="margin-top: 20px;">
+            <div class="section-title">Observações & Condições</div>
+            <div style="border: 1px solid #e5e7eb; padding: 10px; font-size: 12px; background: #fcfcfc;">
+                ${viewingOrder.currentStatus === OrderStatus.ORCAMENTO && viewingOrder.quoteValidity ? `
+                <div style="margin-bottom: 8px;">
+                    <strong>Validade da Proposta:</strong> ${viewingOrder.quoteValidity}
+                </div>` : ''}
+                
+                ${viewingOrder.notes ? `
+                <div>
+                    <strong>Notas:</strong> ${viewingOrder.notes}
+                </div>` : ''}
+            </div>
+        </div>
+        ` : ''}
 
         ${viewingOrder.currentStatus !== OrderStatus.ORCAMENTO ? `
         <div class="print-footer">
@@ -1667,9 +1682,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         </div>
       )}
 
-      {/* ... (Rest of the component: Managing Status, Viewing Order, etc. remains largely same logic, just filters applied above) ... */}
-      
-      {/* ... (Managing Status Modal - No changes needed except ensuring it works for orders) ... */}
+      {/* ... (Restante do componente permanece igual) ... */}
       {managingStatusOrder && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">

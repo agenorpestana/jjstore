@@ -707,7 +707,10 @@ app.get('/api/orders', async (req, res) => {
         downPayment: parseFloat(order.downPayment),
         items: items.map(i => ({...i, price: parseFloat(i.price)})),
         timeline: timeline.map(t => ({...t, completed: !!t.completed})),
-        photos: photos.map(p => p.photo_data)
+        photos: photos.map(p => p.photo_data),
+        // Mapeamento correto para o Frontend
+        quoteValidity: order.quote_validity,
+        notes: order.notes
       };
     }));
     res.json(fullOrders);
@@ -744,7 +747,10 @@ app.get('/api/orders/:id', async (req, res) => {
       downPayment: parseFloat(order.downPayment),
       items: items.map(i => ({...i, price: parseFloat(i.price)})),
       timeline: timeline.map(t => ({...t, completed: !!t.completed})),
-      photos: photos.map(p => p.photo_data)
+      photos: photos.map(p => p.photo_data),
+      // Mapeamento correto para o Frontend
+      quoteValidity: order.quote_validity,
+      notes: order.notes
     };
 
     res.json(fullOrder);
@@ -866,6 +872,7 @@ app.patch('/api/orders/:id/convert', async (req, res) => {
     }
 });
 
+// ... (Rest of the file remains unchanged) ...
 app.patch('/api/orders/:id/status', async (req, res) => {
   if (!pool) return res.status(500).json({error: "DB Not Init"});
   const conn = await pool.getConnection();
