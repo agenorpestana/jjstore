@@ -89,6 +89,8 @@ async function initDB() {
         printingDate VARCHAR(20),
         seamstress VARCHAR(100),
         currentStatus VARCHAR(50),
+        quote_validity VARCHAR(20),
+        notes TEXT,
         FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
       );
 
@@ -147,7 +149,10 @@ async function initDB() {
        "ALTER TABLE companies ADD COLUMN trial_ends_at DATETIME",
        "ALTER TABLE companies ADD COLUMN next_payment_due DATETIME",
        "ALTER TABLE companies ADD COLUMN last_payment_date DATETIME",
-       "ALTER TABLE plans ADD COLUMN visible BOOLEAN DEFAULT TRUE"
+       "ALTER TABLE plans ADD COLUMN visible BOOLEAN DEFAULT TRUE",
+       // New Quote Fields
+       "ALTER TABLE orders ADD COLUMN quote_validity VARCHAR(20)",
+       "ALTER TABLE orders ADD COLUMN notes TEXT"
     ];
 
     for (const query of migrationQueries) {
@@ -760,9 +765,9 @@ app.post('/api/orders', async (req, res) => {
     const order = req.body;
 
     await conn.query(
-      `INSERT INTO orders (id, company_id, customerName, customerPhone, orderDate, estimatedDelivery, total, downPayment, paymentMethod, shippingAddress, pressingDate, printingDate, seamstress, currentStatus)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [order.id, companyId, order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.currentStatus]
+      `INSERT INTO orders (id, company_id, customerName, customerPhone, orderDate, estimatedDelivery, total, downPayment, paymentMethod, shippingAddress, pressingDate, printingDate, seamstress, currentStatus, quote_validity, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [order.id, companyId, order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.currentStatus, order.quoteValidity, order.notes]
     );
 
     if (order.items && order.items.length > 0) {
@@ -800,8 +805,8 @@ app.put('/api/orders/:id', async (req, res) => {
     const order = req.body;
 
     await conn.query(
-      `UPDATE orders SET customerName=?, customerPhone=?, orderDate=?, estimatedDelivery=?, total=?, downPayment=?, paymentMethod=?, shippingAddress=?, pressingDate=?, printingDate=?, seamstress=? WHERE id=?`,
-      [order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, orderId]
+      `UPDATE orders SET customerName=?, customerPhone=?, orderDate=?, estimatedDelivery=?, total=?, downPayment=?, paymentMethod=?, shippingAddress=?, pressingDate=?, printingDate=?, seamstress=?, quote_validity=?, notes=? WHERE id=?`,
+      [order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.quoteValidity, order.notes, orderId]
     );
 
     await conn.query('DELETE FROM order_items WHERE order_id = ?', [orderId]);
@@ -825,6 +830,40 @@ app.put('/api/orders/:id', async (req, res) => {
   } finally {
     conn.release();
   }
+});
+
+// NOVO: Converter orçamento em pedido
+app.patch('/api/orders/:id/convert', async (req, res) => {
+    if (!pool) return res.status(500).json({error: "DB Not Init"});
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const orderId = req.params.id;
+        
+        // Atualiza status para PEDIDO_FEITO e adiciona na timeline
+        const timestamp = new Date().toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' });
+        
+        await conn.query("UPDATE orders SET currentStatus = 'PEDIDO_FEITO' WHERE id = ?", [orderId]);
+        
+        // Adiciona evento na timeline
+        await conn.query(
+            "INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)",
+            [orderId, 'PEDIDO_FEITO', timestamp, 'Orçamento aprovado e convertido em pedido.', true]
+        );
+
+        // Adiciona os próximos passos na timeline (vazios)
+        await conn.query("INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)", [orderId, 'EM_PRODUCAO', '-', 'Aguardando início da produção.', false]);
+        await conn.query("INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)", [orderId, 'CONCLUIDO', '-', 'Aguardando conclusão.', false]);
+
+        await conn.commit();
+        res.json({ message: 'Orçamento convertido em pedido' });
+    } catch (err) {
+        await conn.rollback();
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        conn.release();
+    }
 });
 
 app.patch('/api/orders/:id/status', async (req, res) => {

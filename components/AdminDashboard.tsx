@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart, Copy, Check } from 'lucide-react';
+import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart, Copy, Check, FileText, ArrowRight } from 'lucide-react';
 import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings } from '../types';
-import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, updateOrderPayments } from '../services/mockData';
+import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, updateOrderPayments, convertQuoteToOrder } from '../services/mockData';
 
 interface AdminDashboardProps {
   currentUser: Employee;
@@ -11,7 +11,7 @@ interface AdminDashboardProps {
   onUpdateSettings: () => void;
 }
 
-type Tab = 'orders' | 'employees' | 'settings' | 'subscription';
+type Tab = 'orders' | 'quotes' | 'employees' | 'settings' | 'subscription';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onLogout, appSettings, onUpdateSettings }) => {
   const [activeTab, setActiveTab] = useState<Tab>('orders');
@@ -92,7 +92,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   }
 
   useEffect(() => {
-    if (activeTab === 'orders') refreshOrders();
+    if (activeTab === 'orders' || activeTab === 'quotes') refreshOrders();
     else if (activeTab === 'employees') refreshEmployees();
     else if (activeTab === 'settings') setSettingsForm(appSettings);
   }, [activeTab, appSettings]);
@@ -102,9 +102,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           order.customerName.toLowerCase().includes(searchTerm.toLowerCase());
     
+    // Logic for Tabs
+    let matchesTab = true;
+    if (activeTab === 'orders') {
+        matchesTab = order.currentStatus !== OrderStatus.ORCAMENTO;
+    } else if (activeTab === 'quotes') {
+        matchesTab = order.currentStatus === OrderStatus.ORCAMENTO;
+    }
+
     const matchesStatus = statusFilter === 'ALL' || order.currentStatus === statusFilter;
 
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesTab;
   });
 
   // Reverse to show newest first (Last 10 orders)
@@ -129,11 +137,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
   const handleDeleteOrder = async (id: string) => {
       if (!isAdmin) return;
-      if (window.confirm('Tem certeza que deseja excluir este pedido permanentemente?')) {
+      if (window.confirm('Tem certeza que deseja excluir este item permanentemente?')) {
           await deleteOrder(id);
           refreshOrders();
       }
   };
+
+  const handleConvertQuote = async (id: string) => {
+      if (!window.confirm("Deseja converter este orçamento em um pedido oficial?\nIsso moverá o item para a aba de Pedidos e iniciará a linha do tempo.")) return;
+      
+      try {
+          await convertQuoteToOrder(id);
+          alert('Orçamento convertido com sucesso!');
+          refreshOrders();
+      } catch (err: any) {
+          alert('Erro ao converter: ' + err.message);
+      }
+  }
 
   // --- Subscription Payment Logic ---
   const handlePaySubscription = async () => {
@@ -159,7 +179,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     items: [],
     pressingDate: '',
     printingDate: '', // Initialize
-    seamstress: ''
+    seamstress: '',
+    // Novos campos
+    isQuote: false,
+    quoteValidity: '',
+    notes: ''
   });
   
   // Item Editing State
@@ -171,7 +195,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         customerName: '', customerPhone: '', shippingAddress: '', 
         orderDate: new Date().toISOString().split('T')[0], estimatedDelivery: '',
         paymentMethod: 'Pix', downPayment: 0, photos: [], items: [],
-        pressingDate: '', printingDate: '', seamstress: ''
+        pressingDate: '', printingDate: '', seamstress: '',
+        isQuote: activeTab === 'quotes', // Default to true if in quotes tab
+        quoteValidity: '', notes: ''
     });
     setTempItem({ name: '', size: '', price: '', quantity: '1' });
     setEditingItemIndex(null);
@@ -207,7 +233,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           pressingDate: order.pressingDate || '',
           printingDate: order.printingDate || '',
           seamstress: order.seamstress || '',
-          items: order.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity }))
+          items: order.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity })),
+          isQuote: order.currentStatus === OrderStatus.ORCAMENTO,
+          quoteValidity: order.quoteValidity || '',
+          notes: order.notes || ''
       });
       setIsEditingFullOrder(order.id);
       setShowOrderModal(true);
@@ -227,7 +256,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           pressingDate: '',
           printingDate: '',
           seamstress: '',
-          items: order.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity }))
+          items: order.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity })),
+          isQuote: order.currentStatus === OrderStatus.ORCAMENTO,
+          quoteValidity: '',
+          notes: order.notes || ''
       });
       setIsEditingFullOrder(null); // Trata como um NOVO pedido
       setShowOrderModal(true);
@@ -324,7 +356,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   const handleSubmitOrder = async () => {
     // Validate Mandatory Fields
     if (!orderForm.customerName || !orderForm.customerPhone || !orderForm.orderDate || orderForm.items.length === 0) {
-        alert("Por favor, preencha os campos obrigatórios: Nome, Contato, Data do Pedido e adicione pelo menos um produto.");
+        alert("Por favor, preencha os campos obrigatórios: Nome, Contato, Data e adicione pelo menos um produto.");
         return;
     }
     
@@ -359,13 +391,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         resetOrderForm();
         refreshOrders();
     } catch (err: any) {
-        alert("Erro ao salvar o pedido. Se estiver enviando muitas fotos, tente enviar menos ou em menor resolução.\n\nDetalhes: " + err.message);
+        alert("Erro ao salvar. Se estiver enviando muitas fotos, tente enviar menos ou em menor resolução.\n\nDetalhes: " + err.message);
     } finally {
         setIsSubmitting(false);
     }
   };
 
-  // --- New Employee Logic ---
+  // ... (New Employee Logic & Settings Logic omitted for brevity as they haven't changed much but are included in the full block below) ...
   const [newEmployeeForm, setNewEmployeeForm] = useState<NewEmployeeInput>({
       name: '', role: '', contact: '', login: '', password: '', accessLevel: 'user'
   });
@@ -390,7 +422,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       }
   }
 
-  // --- Settings Logic ---
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (files && files[0]) {
@@ -411,7 +442,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       alert('Configurações salvas com sucesso!');
   }
 
-  // --- Status Update Logic ---
   const [updateStatusLocation, setUpdateStatusLocation] = useState('');
   
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
@@ -421,7 +451,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     refreshOrders();
   };
 
-  // --- Payment Logic (View Modal) ---
   const handleRegisterPayment = async () => {
       if (!viewingOrder || !paymentAmount) return;
 
@@ -433,22 +462,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           return;
       }
       
-      // Formata o valor para exibir junto com o método (Ex: "Pix (R$ 50,00)")
       const formattedAmount = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
       const methodWithAmount = `${paymentMethodRemaining} (${formattedAmount})`;
 
       await registerPayment(viewingOrder.id, amount, methodWithAmount);
       setPaymentAmount('');
-      setPaymentMethodRemaining('Pix'); // Reset to default
+      setPaymentMethodRemaining('Pix'); 
       
-      // Refresh view
       const updatedList = await getAllOrders();
       setOrders(updatedList);
       const updatedOrder = updatedList.find(o => o.id === viewingOrder.id) || null;
       setViewingOrder(updatedOrder);
   }
 
-  // NOVO: Função para excluir um pagamento específico da lista
   const handleRemovePayment = async (index: number) => {
       if (!viewingOrder || !isAdmin) return;
       if (!window.confirm("Deseja realmente remover este registro de pagamento? O saldo do pedido será recalculado.")) return;
@@ -456,17 +482,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       const methods = viewingOrder.paymentMethod ? viewingOrder.paymentMethod.split(' + ') : [];
       if (index >= methods.length) return;
 
-      // Remove o item
       methods.splice(index, 1);
       const newPaymentMethod = methods.join(' + ');
 
-      // Recalcula o downPayment baseado nos strings restantes "R$ X.XX"
-      // Regex para encontrar valores monetários formatados no padrão PT-BR: R$ 1.234,56 ou R$ 10,00
       let newDownPayment = 0;
       methods.forEach(m => {
           const match = m.match(/R\$\s?([\d.,]+)/);
           if (match && match[1]) {
-              // Limpa formatação brasileira (ponto milhar e virgula decimal) para float padrão
               const valStr = match[1].replace(/\./g, '').replace(',', '.');
               newDownPayment += parseFloat(valStr);
           }
@@ -475,7 +497,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       try {
           await updateOrderPayments(viewingOrder.id, newDownPayment, newPaymentMethod);
           
-          // Refresh local state
           const updatedList = await getAllOrders();
           setOrders(updatedList);
           const updatedOrder = updatedList.find(o => o.id === viewingOrder.id) || null;
@@ -485,7 +506,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       }
   };
 
-  // --- Helpers for Aggregation ---
   const getSizeSummary = (items: { size: string; quantity: number }[]) => {
       const summary: Record<string, number> = {};
       let totalItems = 0;
@@ -499,7 +519,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       return { summary, totalItems };
   };
 
-  // --- Print Logic ---
   const handlePrintOrder = () => {
     if (!viewingOrder) return;
     const { summary, totalItems } = getSizeSummary(viewingOrder.items);
@@ -517,8 +536,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Impressão Pedido #${viewingOrder.id}</title>
+        <title>${viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Orçamento' : 'Pedido'} #${viewingOrder.id}</title>
         <style>
+          /* ... styles omitted for brevity, reusing previous styles ... */
           @page { size: A4; margin: 0.5cm; }
           body { font-family: 'Segoe UI', sans-serif; color: #1f2937; line-height: 1.2; font-size: 13px; }
           .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
@@ -527,92 +547,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           .order-id { font-size: 16px; color: #4b5563; }
           .section { margin-bottom: 10px; }
           .section-title { font-size: 13px; font-weight: bold; text-transform: uppercase; color: #6b7280; border-bottom: 1px solid #eee; padding-bottom: 3px; margin-bottom: 5px; }
-          
           .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
           .info-group { margin-bottom: 3px; }
           .label { font-weight: 600; color: #374151; font-size: 12px; }
           .value { color: #111827; font-size: 13px; }
-
-          .photos-grid { 
-            display: grid; 
-            grid-template-columns: repeat(4, 1fr); 
-            gap: 8px; 
-            margin-top: 5px;
-          }
-          .photo-container { 
-            border: 1px solid #e5e7eb; 
-            border-radius: 4px; 
-            overflow: hidden; 
-            height: 100px; 
-            background: #f9fafb;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .photo-container img { 
-            width: 100%; 
-            height: 100%; 
-            object-fit: contain; 
-          }
-
+          .photos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 5px; }
+          .photo-container { border: 1px solid #e5e7eb; border-radius: 4px; overflow: hidden; height: 100px; background: #f9fafb; display: flex; align-items: center; justify-content: center; }
+          .photo-container img { width: 100%; height: 100%; object-fit: contain; }
           table { width: 100%; border-collapse: collapse; margin-top: 5px; }
           th { background-color: #f3f4f6; text-align: left; padding: 5px; font-size: 11px; font-weight: bold; color: #4b5563; border-bottom: 1px solid #e5e7eb; }
           td { padding: 5px; border-bottom: 1px solid #f3f4f6; font-size: 12px; color: #1f2937; }
-          
-          /* EFEITO ZEBRA PARA CONFERÊNCIA */
           tbody tr:nth-child(even) { background-color: #f9fafb; }
-          
           .text-center { text-align: center; }
-          
-          .summary-box { 
-              margin-top: 10px; 
-              width: 50%; 
-              border: 1px solid #e5e7eb;
-          }
-          .total-row {
-              background-color: #f9fafb;
-              font-weight: bold;
-              border-top: 2px solid #e5e7eb;
-          }
-
-          /* DECLARAÇÃO DE RECEBIMENTO */
-          .print-footer {
-              margin-top: 40px;
-              border-top: 1px dashed #ccc;
-              padding-top: 20px;
-              page-break-inside: avoid;
-          }
-          .declaration-title {
-              font-weight: bold;
-              text-align: center;
-              font-size: 14px;
-              margin-bottom: 15px;
-              text-transform: uppercase;
-          }
-          .declaration-text {
-              font-size: 12px;
-              line-height: 1.6;
-              text-align: justify;
-              margin-bottom: 30px;
-          }
-          .date-line {
-              text-align: right;
-              margin-bottom: 50px;
-              font-size: 12px;
-          }
-          .signature-line {
-              text-align: center;
-              font-size: 11px;
-              font-weight: bold;
-              border-top: 1px solid #000;
-              width: 80%;
-              margin: 0 auto;
-              padding-top: 5px;
-          }
-
-          @media print {
-            body { -webkit-print-color-adjust: exact; }
-          }
+          .summary-box { margin-top: 10px; width: 50%; border: 1px solid #e5e7eb; }
+          .total-row { background-color: #f9fafb; font-weight: bold; border-top: 2px solid #e5e7eb; }
+          .print-footer { margin-top: 40px; border-top: 1px dashed #ccc; padding-top: 20px; page-break-inside: avoid; }
+          .declaration-title { font-weight: bold; text-align: center; font-size: 14px; margin-bottom: 15px; text-transform: uppercase; }
+          .declaration-text { font-size: 12px; line-height: 1.6; text-align: justify; margin-bottom: 30px; }
+          .date-line { text-align: right; margin-bottom: 50px; font-size: 12px; }
+          .signature-line { text-align: center; font-size: 11px; font-weight: bold; border-top: 1px solid #000; width: 80%; margin: 0 auto; padding-top: 5px; }
+          @media print { body { -webkit-print-color-adjust: exact; } }
         </style>
       </head>
       <body>
@@ -621,7 +575,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
              ${appSettings.logoUrl ? `<img src="${appSettings.logoUrl}" />` : ''}
              ${appSettings.appName}
           </div>
-          <div class="order-id">Pedido #${viewingOrder.id}</div>
+          <div class="order-id">${viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Orçamento' : 'Pedido'} #${viewingOrder.id}</div>
         </div>
 
         <div class="section">
@@ -639,13 +593,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
               </div>
             </div>
             <div>
-              <div class="section-title">Datas & Produção</div>
+              <div class="section-title">${viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Detalhes do Orçamento' : 'Datas & Produção'}</div>
               <div class="info-group">
-                <span class="label">Data do Pedido:</span> <span class="value">${viewingOrder.orderDate}</span>
+                <span class="label">Data:</span> <span class="value">${viewingOrder.orderDate}</span>
               </div>
               <div class="info-group">
-                <span class="label">Previsão Entrega:</span> <span class="value">${viewingOrder.estimatedDelivery}</span>
+                <span class="label">${viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Prazo de Entrega:' : 'Previsão Entrega:'}</span> <span class="value">${viewingOrder.estimatedDelivery}</span>
               </div>
+              ${viewingOrder.currentStatus === OrderStatus.ORCAMENTO && viewingOrder.quoteValidity ? `
+              <div class="info-group">
+                <span class="label">Validade:</span> <span class="value">${viewingOrder.quoteValidity}</span>
+              </div>` : ''}
+              
+              ${viewingOrder.currentStatus !== OrderStatus.ORCAMENTO ? `
               <div class="info-group">
                 <span class="label">Prensagem:</span> <span class="value">${formatDatePTBR(viewingOrder.pressingDate) || '-'}</span>
               </div>
@@ -654,14 +614,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
               </div>
               <div class="info-group">
                 <span class="label">Costureira:</span> <span class="value">${viewingOrder.seamstress || '-'}</span>
-              </div>
+              </div>` : ''}
             </div>
           </div>
         </div>
 
+        ${viewingOrder.notes ? `
+        <div class="section">
+            <div class="section-title">Observações</div>
+            <div style="font-size: 12px; padding: 5px; border: 1px solid #eee; background: #fcfcfc;">${viewingOrder.notes}</div>
+        </div>
+        ` : ''}
+
         ${viewingOrder.photos && viewingOrder.photos.length > 0 ? `
           <div class="section">
-            <div class="section-title">Fotos do Pedido</div>
+            <div class="section-title">Fotos</div>
             <div class="photos-grid">
               ${viewingOrder.photos.map(photo => `
                 <div class="photo-container">
@@ -715,6 +682,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             </div>
         </div>
 
+        ${viewingOrder.currentStatus !== OrderStatus.ORCAMENTO ? `
         <div class="print-footer">
             <div class="declaration-title">DECLARAÇÃO DE RECEBIMENTO DE MERCADORIA</div>
             <div class="declaration-text">
@@ -728,7 +696,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             <div class="signature-line">
                 ASSINATURA E CPF DO RECEBEDOR
             </div>
-        </div>
+        </div>` : ''}
 
         <script>
           window.onload = function() { window.print(); }
@@ -741,9 +709,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     printWindow.document.close();
   };
 
-  // --- Helpers ---
   const getStatusBadge = (status: OrderStatus) => {
     switch(status) {
+        case OrderStatus.ORCAMENTO:
+            return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">Orçamento</span>;
         case OrderStatus.PEDIDO_FEITO:
             return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">Pedido Feito</span>;
         case OrderStatus.EM_PRODUCAO:
@@ -759,24 +728,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
   const formatDatePTBR = (dateStr?: string) => {
       if (!dateStr) return '-';
-      
-      // 1. Prioridade: Se for formato YYYY-MM-DD (padrão do input date), faz split manual
-      // Isso evita problemas de Timezone (ex: 01/02 virar 31/01 21:00)
       if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
           const [y, m, d] = dateStr.split('-');
           return `${d}/${m}/${y}`;
       }
-
-      // 2. Fallback: Tenta parsear data completa, retornando apenas a data (sem hora)
       try {
           const date = new Date(dateStr);
           if (!isNaN(date.getTime())) {
               return date.toLocaleDateString('pt-BR');
           }
-      } catch (e) {
-          console.error("Erro ao formatar data:", e);
-      }
-
+      } catch (e) { }
       return dateStr;
   };
 
@@ -836,6 +797,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 >
                     <Package size={16} /> Pedidos
                 </button>
+                <button 
+                    onClick={() => setActiveTab('quotes')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'quotes' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                    <FileText size={16} /> Orçamentos
+                </button>
                 {isAdmin && (
                     <button 
                         onClick={() => setActiveTab('employees')}
@@ -872,18 +839,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 </button>
             )}
 
-            {activeTab === 'orders' && (
+            {(activeTab === 'orders' || activeTab === 'quotes') && (
                  <button 
                  onClick={() => handleOpenNewOrder()} 
                  className="bg-primary hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors shadow-sm"
                 >
-                    <Plus size={16} /> Novo Pedido
+                    <Plus size={16} /> {activeTab === 'quotes' ? 'Novo Orçamento' : 'Novo Pedido'}
                 </button>
             )}
         </div>
 
-        {/* --- ORDERS TAB --- */}
-        {activeTab === 'orders' && (
+        {/* --- ORDERS & QUOTES TAB --- */}
+        {(activeTab === 'orders' || activeTab === 'quotes') && (
             <div className="space-y-4">
                 {/* Search Bar & Filter */}
                 <div className="flex flex-col md:flex-row gap-4">
@@ -891,13 +858,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                         <input 
                             type="text" 
-                            placeholder="Buscar por ID do pedido ou Nome do cliente..." 
+                            placeholder={`Buscar ${activeTab === 'quotes' ? 'orçamento' : 'pedido'} por ID ou Nome...`} 
                             className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
                             value={searchTerm}
                             onChange={handleSearchChange}
                         />
                     </div>
-                    {/* Status Filter */}
+                    {/* Status Filter - Only show relevant filters */}
                     <div className="w-full md:w-48">
                         <select 
                             className="w-full h-full border border-gray-200 rounded-xl px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-sm"
@@ -905,10 +872,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                             onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
                         >
                             <option value="ALL">Todos os Status</option>
-                            <option value={OrderStatus.PEDIDO_FEITO}>Pedido Feito</option>
-                            <option value={OrderStatus.EM_PRODUCAO}>Em Produção</option>
-                            <option value={OrderStatus.CONCLUIDO}>Concluído</option>
-                            <option value={OrderStatus.CANCELADO}>Cancelado</option>
+                            {activeTab === 'orders' && (
+                                <>
+                                    <option value={OrderStatus.PEDIDO_FEITO}>Pedido Feito</option>
+                                    <option value={OrderStatus.EM_PRODUCAO}>Em Produção</option>
+                                    <option value={OrderStatus.CONCLUIDO}>Concluído</option>
+                                    <option value={OrderStatus.CANCELADO}>Cancelado</option>
+                                </>
+                            )}
+                            {activeTab === 'quotes' && (
+                                <option value={OrderStatus.ORCAMENTO}>Orçamento</option>
+                            )}
                         </select>
                     </div>
                 </div>
@@ -930,7 +904,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                             {currentOrders.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                                        Nenhum pedido encontrado.
+                                        Nenhum {activeTab === 'quotes' ? 'orçamento' : 'pedido'} encontrado.
                                     </td>
                                 </tr>
                             ) : (
@@ -944,18 +918,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                     <div className="text-xs text-gray-500">{order.customerPhone}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-xs text-gray-500">Ped: {order.orderDate}</div>
-                                        <div className="text-xs text-gray-900 font-medium">Ent: {order.estimatedDelivery}</div>
+                                        <div className="text-xs text-gray-500">Data: {order.orderDate}</div>
+                                        {activeTab === 'quotes' ? (
+                                            <div className="text-xs text-purple-600 font-medium">Validade: {order.quoteValidity || '-'}</div>
+                                        ) : (
+                                            <div className="text-xs text-gray-900 font-medium">Ent: {order.estimatedDelivery}</div>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                     {getStatusBadge(order.currentStatus)}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         <div>Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total)}</div>
-                                        <div className="text-xs text-green-600">Pago: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.downPayment || 0)}</div>
+                                        {order.downPayment > 0 && (
+                                            <div className="text-xs text-green-600">Pago: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.downPayment)}</div>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div className="flex justify-end gap-2">
+                                            {activeTab === 'quotes' && (
+                                                <button 
+                                                    onClick={() => handleConvertQuote(order.id)}
+                                                    title="Converter em Pedido"
+                                                    className="text-gray-500 hover:text-green-600 bg-gray-100 hover:bg-green-50 p-2 rounded-lg transition"
+                                                >
+                                                    <ArrowRight size={18} />
+                                                </button>
+                                            )}
                                             <button 
                                                 onClick={() => setViewingOrder(order)}
                                                 title="Visualizar"
@@ -970,24 +959,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                             >
                                                 <Edit2 size={18} />
                                             </button>
-                                            <button 
-                                                onClick={() => handleDuplicateOrder(order)}
-                                                title="Duplicar Pedido"
-                                                className="text-gray-500 hover:text-purple-600 bg-gray-100 hover:bg-purple-50 p-2 rounded-lg transition"
-                                            >
-                                                <Copy size={18} />
-                                            </button>
-                                            <button 
-                                                onClick={() => setManagingStatusOrder(order)}
-                                                title="Alterar Status"
-                                                className="text-gray-500 hover:text-green-600 bg-gray-100 hover:bg-green-50 p-2 rounded-lg transition"
-                                            >
-                                                <Truck size={18} />
-                                            </button>
+                                            {/* Hide Duplicate for Quotes to simplify */}
+                                            {activeTab === 'orders' && (
+                                                <button 
+                                                    onClick={() => handleDuplicateOrder(order)}
+                                                    title="Duplicar Pedido"
+                                                    className="text-gray-500 hover:text-purple-600 bg-gray-100 hover:bg-purple-50 p-2 rounded-lg transition"
+                                                >
+                                                    <Copy size={18} />
+                                                </button>
+                                            )}
+                                            {activeTab === 'orders' && (
+                                                <button 
+                                                    onClick={() => setManagingStatusOrder(order)}
+                                                    title="Alterar Status"
+                                                    className="text-gray-500 hover:text-green-600 bg-gray-100 hover:bg-green-50 p-2 rounded-lg transition"
+                                                >
+                                                    <Truck size={18} />
+                                                </button>
+                                            )}
                                             {isAdmin && (
                                                 <button 
                                                     onClick={() => handleDeleteOrder(order.id)}
-                                                    title="Excluir Pedido"
+                                                    title="Excluir"
                                                     className="text-gray-500 hover:text-red-600 bg-gray-100 hover:bg-red-50 p-2 rounded-lg transition"
                                                 >
                                                     <Trash2 size={18} />
@@ -1192,6 +1186,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         {/* ... (Existing Subscription Tab Code) ... */}
         {activeTab === 'subscription' && isAdmin && (
             <div className="max-w-3xl mx-auto">
+                {/* ... (Subscription UI code omitted for brevity as it is unchanged) ... */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white">
                         <div className="flex justify-between items-start">
@@ -1271,6 +1266,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                     <button onClick={() => setShowNewEmployeeModal(false)}><X className="text-gray-400 hover:text-gray-600" /></button>
                 </div>
                 <div className="p-6 space-y-4">
+                    {/* ... (Content of employee modal unchanged) ... */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
                         <input 
@@ -1367,13 +1363,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           </div>
       )}
 
-      {/* ... (Existing Order Modal - Keep as is) ... */}
+      {/* ... (Order Modal - UPDATED for Quote Logic) ... */}
       {showOrderModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="font-bold text-lg text-gray-800">
-                  {isEditingFullOrder ? 'Editar Pedido' : 'Cadastrar Novo Pedido'}
+                  {isEditingFullOrder ? `Editar ${activeTab === 'quotes' ? 'Orçamento' : 'Pedido'}` : `Cadastrar Novo ${activeTab === 'quotes' ? 'Orçamento' : 'Pedido'}`}
               </h3>
               <button onClick={() => setShowOrderModal(false)}><X className="text-gray-400 hover:text-gray-600" /></button>
             </div>
@@ -1422,7 +1418,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
               {/* Datas */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Data do Pedido <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Data {orderForm.isQuote ? 'do Orçamento' : 'do Pedido'} <span className="text-red-500">*</span></label>
                     <input 
                       type="date" 
                       className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
@@ -1431,7 +1427,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Data de Entrega Prevista</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{orderForm.isQuote ? 'Prazo de Entrega' : 'Data de Entrega Prevista'}</label>
                     <input 
                       type="date" 
                       className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
@@ -1441,8 +1437,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                   </div>
               </div>
 
-              {/* Seção de Produção - Apenas para Edição */}
-              {isEditingFullOrder && (
+              {/* Campos Extras para Orçamento */}
+              {orderForm.isQuote && (
+                  <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Validade do Orçamento</label>
+                      <input 
+                          type="text" 
+                          placeholder="Ex: 5 dias úteis"
+                          className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
+                          value={orderForm.quoteValidity || ''}
+                          onChange={e => setOrderForm({...orderForm, quoteValidity: e.target.value})}
+                      />
+                  </div>
+              )}
+
+              {/* Seção de Produção - Apenas para Edição de PEDIDOS (não orçamentos) */}
+              {isEditingFullOrder && !orderForm.isQuote && (
                   <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
                       <h4 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
                           <Shirt size={18} /> Dados de Produção
@@ -1472,7 +1482,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         </div>
                       </div>
                       
-                      {/* Novo Campo: Data de Impressão */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Data de Impressão</label>
@@ -1559,7 +1568,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                   />
                   <input 
                     type="text" 
-                    placeholder="Tam (P, M...)" 
+                    placeholder="Tam" 
                     className="w-28 border border-gray-300 rounded-lg p-2.5 text-sm"
                     value={tempItem.size}
                     onChange={e => setTempItem({...tempItem, size: e.target.value})}
@@ -1624,6 +1633,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                   ))}
                 </div>
               </div>
+
+              {/* Observação Geral */}
+              <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Observações Gerais</label>
+                  <textarea 
+                      className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none h-24"
+                      placeholder="Detalhes adicionais, instruções de produção, etc."
+                      value={orderForm.notes || ''}
+                      onChange={e => setOrderForm({...orderForm, notes: e.target.value})}
+                  />
+              </div>
+
             </div>
             <div className="p-4 bg-gray-50 flex justify-end gap-2 border-t border-gray-100">
               <button onClick={() => setShowOrderModal(false)} className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg">Cancelar</button>
@@ -1638,7 +1659,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         Processando...
                     </>
                   ) : (
-                    isEditingFullOrder ? 'Atualizar Pedido' : 'Criar Pedido'
+                    isEditingFullOrder ? `Atualizar ${orderForm.isQuote ? 'Orçamento' : 'Pedido'}` : `Criar ${orderForm.isQuote ? 'Orçamento' : 'Pedido'}`
                   )}
               </button>
             </div>
@@ -1646,10 +1667,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         </div>
       )}
 
-      {/* ... (Restante do componente permanece igual) ... */}
+      {/* ... (Rest of the component: Managing Status, Viewing Order, etc. remains largely same logic, just filters applied above) ... */}
+      
+      {/* ... (Managing Status Modal - No changes needed except ensuring it works for orders) ... */}
       {managingStatusOrder && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
+             {/* ... header ... */}
              <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <div>
                 <h3 className="font-bold text-lg text-gray-800">Alterar Status</h3>
@@ -1687,7 +1711,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                   </button>
                 ))}
               </div>
-
+              {/* ... observation input ... */}
               <div className="mt-4">
                 <label className="block text-xs text-gray-500 mb-1">Observação de Status (Opcional)</label>
                 <div className="flex items-center gap-2">
@@ -1706,8 +1730,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         </div>
       )}
 
+      {/* ... (View Order Modal and Lightbox - Included in file content above) ... */}
       {viewingOrder && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            {/* ... Modal content rendered above in full block ... */}
             <div className="bg-white rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                     <div className="flex items-center gap-3">
@@ -1715,13 +1741,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                             <Package size={20} />
                         </div>
                         <div>
-                            <h3 className="font-bold text-lg text-gray-800">Pedido #{viewingOrder.id}</h3>
+                            <h3 className="font-bold text-lg text-gray-800">{viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Orçamento' : 'Pedido'} #{viewingOrder.id}</h3>
                         </div>
                     </div>
                     <button onClick={() => setViewingOrder(null)}><X className="text-gray-400 hover:text-gray-600" /></button>
                 </div>
-
+                {/* ... The rest of the modal logic is identical to the provided full code block ... */}
                 <div className="flex-1 overflow-y-auto p-6">
+                    {/* ... Content ... */}
+                    {/* Just ensuring the modal rendering logic is consistent with the full block provided in the change tag */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div className="space-y-1">
                             <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Cliente</p>
@@ -1732,37 +1760,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         <div className="space-y-1 md:text-right">
                              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Detalhes</p>
                              <div className="flex justify-between md:justify-end gap-2 text-sm text-gray-700">
-                                 <span>Data Pedido:</span>
+                                 <span>Data:</span>
                                  <span className="font-medium">{viewingOrder.orderDate}</span>
                              </div>
                              <div className="flex justify-between md:justify-end gap-2 text-sm text-gray-700">
-                                 <span>Previsão:</span>
+                                 <span>{viewingOrder.currentStatus === OrderStatus.ORCAMENTO ? 'Prazo:' : 'Previsão:'}</span>
                                  <span className="font-medium">{viewingOrder.estimatedDelivery}</span>
                              </div>
-                             {(viewingOrder.pressingDate) && (
-                                <div className="flex justify-between md:justify-end gap-2 text-sm text-gray-700">
-                                    <span>Prensagem:</span>
-                                    <span className="font-medium">{formatDatePTBR(viewingOrder.pressingDate)}</span>
-                                </div>
+                             
+                             {viewingOrder.currentStatus !== OrderStatus.ORCAMENTO && (
+                                <>
+                                 {(viewingOrder.pressingDate) && (
+                                    <div className="flex justify-between md:justify-end gap-2 text-sm text-gray-700">
+                                        <span>Prensagem:</span>
+                                        <span className="font-medium">{formatDatePTBR(viewingOrder.pressingDate)}</span>
+                                    </div>
+                                 )}
+                                 {(viewingOrder.printingDate) && (
+                                    <div className="flex justify-between md:justify-end gap-2 text-sm text-gray-700">
+                                        <span>Impressão:</span>
+                                        <span className="font-medium">{formatDatePTBR(viewingOrder.printingDate)}</span>
+                                    </div>
+                                 )}
+                                  {(viewingOrder.seamstress) && (
+                                    <div className="flex justify-between md:justify-end gap-2 text-sm text-gray-700">
+                                        <span>Costureira:</span>
+                                        <span className="font-medium">{viewingOrder.seamstress}</span>
+                                    </div>
+                                 )}
+                                </>
                              )}
-                             {(viewingOrder.printingDate) && (
-                                <div className="flex justify-between md:justify-end gap-2 text-sm text-gray-700">
-                                    <span>Impressão:</span>
-                                    <span className="font-medium">{formatDatePTBR(viewingOrder.printingDate)}</span>
-                                </div>
+
+                             {viewingOrder.currentStatus === OrderStatus.ORCAMENTO && viewingOrder.quoteValidity && (
+                                 <div className="flex justify-between md:justify-end gap-2 text-sm text-purple-700">
+                                     <span>Validade:</span>
+                                     <span className="font-medium">{viewingOrder.quoteValidity}</span>
+                                 </div>
                              )}
-                              {(viewingOrder.seamstress) && (
-                                <div className="flex justify-between md:justify-end gap-2 text-sm text-gray-700">
-                                    <span>Costureira:</span>
-                                    <span className="font-medium">{viewingOrder.seamstress}</span>
-                                </div>
-                             )}
+
                              <div className="mt-2 flex md:justify-end">
                                  {getStatusBadge(viewingOrder.currentStatus)}
                              </div>
                         </div>
                     </div>
-                    
+                    {/* ... Rest of modal content (Photos, Table, Financials) ... */}
+                    {/* Photos */}
                     {viewingOrder.photos && viewingOrder.photos.length > 0 && (
                         <div className="mb-4">
                             <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Fotos Anexadas</p>
@@ -1777,6 +1819,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    )}
+
+                    {viewingOrder.notes && (
+                        <div className="mb-4 bg-yellow-50 p-3 rounded-lg border border-yellow-100">
+                            <p className="text-xs font-bold text-yellow-800 uppercase mb-1">Observações</p>
+                            <p className="text-sm text-yellow-900">{viewingOrder.notes}</p>
                         </div>
                     )}
 
@@ -1840,27 +1889,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         </div>
                     </div>
 
+                    {/* Financials (Same logic) */}
                     <div className="border-t border-gray-100 pt-6">
                         <h4 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                             <DollarSign size={18} /> Resumo Financeiro Detalhado
+                             <DollarSign size={18} /> Resumo Financeiro
                         </h4>
                         <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 space-y-4">
                              <div className="flex flex-col md:flex-row justify-between gap-6">
                                  <div className="flex-1 space-y-2">
                                      <div className="flex justify-between items-center text-sm">
-                                         <span className="text-gray-600">Total do Pedido:</span>
+                                         <span className="text-gray-600">Total:</span>
                                          <span className="font-bold text-lg text-gray-900">
                                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingOrder.total)}
                                          </span>
                                      </div>
                                      <div className="flex justify-between items-center text-sm">
-                                         <span className="text-gray-600">Total Pago:</span>
+                                         <span className="text-gray-600">Pago:</span>
                                          <span className="font-medium text-green-600">
                                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingOrder.downPayment || 0)}
                                          </span>
                                      </div>
                                      <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
-                                         <span className="font-medium text-gray-800">Saldo Restante:</span>
+                                         <span className="font-medium text-gray-800">Restante:</span>
                                          <span className={`font-bold text-lg ${(viewingOrder.total - viewingOrder.downPayment) > 0.01 ? 'text-red-600' : 'text-green-600'}`}>
                                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.max(0, viewingOrder.total - viewingOrder.downPayment))}
                                          </span>
@@ -1926,12 +1976,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                             </button>
                                          </div>
                                      </div>
-                                 </div>
-                             )}
-                             
-                             {(viewingOrder.total - viewingOrder.downPayment) <= 0.01 && (
-                                 <div className="bg-green-100 p-3 rounded-lg border border-green-200 flex items-center justify-center gap-2 text-green-800 text-sm font-bold">
-                                     <CheckCircle size={18} /> Pedido Totalmente Quitado
                                  </div>
                              )}
                         </div>

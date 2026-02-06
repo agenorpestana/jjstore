@@ -246,18 +246,22 @@ export const createOrder = async (input: NewOrderInput): Promise<Order> => {
     shippingAddress: input.shippingAddress,
     paymentMethod: input.paymentMethod,
     downPayment: input.downPayment,
-    currentStatus: OrderStatus.PEDIDO_FEITO,
+    // Se for orçamento, usa status ORCAMENTO, senão PEDIDO_FEITO
+    currentStatus: input.isQuote ? OrderStatus.ORCAMENTO : OrderStatus.PEDIDO_FEITO,
     total,
     photos: input.photos || [],
     pressingDate: input.pressingDate,
-    printingDate: input.printingDate, // Add field
+    printingDate: input.printingDate, 
     seamstress: input.seamstress,
+    // Novos campos
+    quoteValidity: input.quoteValidity,
+    notes: input.notes,
     items: input.items.map((item, idx) => ({
       ...item,
       id: `new-${idx}`,
       image: '' // No random image, will use logo/default icon
     })),
-    timeline: [
+    timeline: input.isQuote ? [] : [ // Orçamento não tem timeline inicial de produção
       {
         status: OrderStatus.PEDIDO_FEITO,
         timestamp: new Date().toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' }),
@@ -309,8 +313,11 @@ export const updateOrderFull = async (id: string, input: NewOrderInput): Promise
         downPayment: input.downPayment,
         photos: input.photos || [],
         pressingDate: input.pressingDate,
-        printingDate: input.printingDate, // Add field
+        printingDate: input.printingDate, 
         seamstress: input.seamstress,
+        // Novos Campos
+        quoteValidity: input.quoteValidity,
+        notes: input.notes,
         total: total,
         items: input.items.map((item, idx) => ({
             ...item,
@@ -329,6 +336,14 @@ export const updateOrderFull = async (id: string, input: NewOrderInput): Promise
     await handleResponse(response);
     return getOrderById(id);
 };
+
+export const convertQuoteToOrder = async (id: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/orders/${id}/convert`, {
+        method: 'PATCH',
+        headers: getHeaders()
+    });
+    await handleResponse(response);
+}
 
 export const deleteOrder = async (id: string): Promise<void> => {
     const response = await fetch(`${API_URL}/orders/${id}`, { 

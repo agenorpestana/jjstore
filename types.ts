@@ -1,5 +1,6 @@
 
 export enum OrderStatus {
+  ORCAMENTO = 'ORCAMENTO',
   PEDIDO_FEITO = 'PEDIDO_FEITO',
   EM_PRODUCAO = 'EM_PRODUCAO',
   CONCLUIDO = 'CONCLUIDO',
@@ -39,8 +40,11 @@ export interface Order {
   timeline: StatusEvent[];
   shippingAddress: string;
   pressingDate?: string;
-  printingDate?: string; // Novo campo
+  printingDate?: string;
   seamstress?: string;
+  // Campos específicos de Orçamento
+  quoteValidity?: string;
+  notes?: string;
 }
 
 export interface NewOrderInput {
@@ -53,9 +57,13 @@ export interface NewOrderInput {
   downPayment: number;
   photos: string[];
   pressingDate?: string;
-  printingDate?: string; // Novo campo
+  printingDate?: string;
   seamstress?: string;
   items: Omit<OrderItem, 'id' | 'image'>[];
+  // Campos específicos de Orçamento
+  isQuote?: boolean;
+  quoteValidity?: string;
+  notes?: string;
 }
 
 export type AccessLevel = 'admin' | 'user' | 'saas_admin';
