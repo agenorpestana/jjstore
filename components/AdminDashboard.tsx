@@ -542,13 +542,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         <style>
           @page { size: A4; margin: 0.5cm; }
           body { font-family: 'Segoe UI', sans-serif; color: #1f2937; line-height: 1.2; font-size: 13px; }
-          .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-start; }
-          .logo { font-size: 20px; font-weight: bold; color: #2563eb; display:flex; align-items:center; gap: 10px; }
-          .logo img { height: 35px; }
-          .company-info { display: flex; flex-direction: column; justify-content: center; }
-          .company-name { font-weight: bold; font-size: 18px; color: #1f2937; }
-          .company-address { font-size: 11px; color: #6b7280; max-width: 300px; }
-          .order-id { font-size: 16px; color: #4b5563; font-weight: bold; white-space: nowrap; }
+          .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: flex-start; }
+          .company-section { display: flex; align-items: flex-start; gap: 15px; }
+          .logo-img { height: 50px; width: auto; object-fit: contain; }
+          .company-details { display: flex; flex-direction: column; }
+          .company-name { font-size: 18px; font-weight: bold; color: #111827; }
+          .company-sub { font-size: 11px; color: #4b5563; margin-top: 2px; }
+          .order-section { text-align: right; }
+          .order-title { font-size: 12px; text-transform: uppercase; color: #6b7280; font-weight: bold; }
+          .order-number { font-size: 24px; font-weight: bold; color: #111827; line-height: 1; }
+          
           .section { margin-bottom: 10px; }
           .section-title { font-size: 13px; font-weight: bold; text-transform: uppercase; color: #6b7280; border-bottom: 1px solid #eee; padding-bottom: 3px; margin-bottom: 5px; }
           .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
@@ -577,14 +580,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       </head>
       <body>
         <div class="header">
-          <div class="logo">
-             ${appSettings.logoUrl ? `<img src="${appSettings.logoUrl}" />` : ''}
-             <div class="company-info">
+          <div class="company-section">
+             ${appSettings.logoUrl ? `<img src="${appSettings.logoUrl}" class="logo-img" />` : ''}
+             <div class="company-details">
                 <div class="company-name">${appSettings.appName}</div>
-                ${appSettings.address ? `<div class="company-address">${appSettings.address} ${appSettings.city ? `- ${appSettings.city}` : ''}</div>` : ''}
+                ${appSettings.businessName ? `<div class="company-sub">${appSettings.businessName}</div>` : ''}
+                ${appSettings.cnpj ? `<div class="company-sub">CNPJ: ${appSettings.cnpj}</div>` : ''}
+                ${appSettings.address ? `<div class="company-sub" style="margin-top: 4px; font-weight: 500;"><strong>Endereço de Retirada:</strong> ${appSettings.address} ${appSettings.city ? `- ${appSettings.city}` : ''}</div>` : ''}
              </div>
           </div>
-          <div class="order-id">${isQuote ? 'Orçamento' : 'Pedido'} #${viewingOrder.id}</div>
+          <div class="order-section">
+            <div class="order-title">${isQuote ? 'Orçamento' : 'Pedido'}</div>
+            <div class="order-number">#${viewingOrder.id}</div>
+          </div>
         </div>
 
         <div class="section">
@@ -598,7 +606,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 <span class="label">Telefone:</span> <span class="value">${viewingOrder.customerPhone}</span>
               </div>
               <div class="info-group">
-                <span class="label">Endereço:</span> <span class="value">${viewingOrder.shippingAddress}</span>
+                <span class="label">Endereço de Entrega:</span> <span class="value">${viewingOrder.shippingAddress || 'Retirada na Loja'}</span>
               </div>
             </div>
             <div>
