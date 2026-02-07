@@ -542,10 +542,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         <style>
           @page { size: A4; margin: 0.5cm; }
           body { font-family: 'Segoe UI', sans-serif; color: #1f2937; line-height: 1.2; font-size: 13px; }
-          .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+          .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-start; }
           .logo { font-size: 20px; font-weight: bold; color: #2563eb; display:flex; align-items:center; gap: 10px; }
           .logo img { height: 35px; }
-          .order-id { font-size: 16px; color: #4b5563; }
+          .company-info { display: flex; flex-direction: column; justify-content: center; }
+          .company-name { font-weight: bold; font-size: 18px; color: #1f2937; }
+          .company-address { font-size: 11px; color: #6b7280; max-width: 300px; }
+          .order-id { font-size: 16px; color: #4b5563; font-weight: bold; white-space: nowrap; }
           .section { margin-bottom: 10px; }
           .section-title { font-size: 13px; font-weight: bold; text-transform: uppercase; color: #6b7280; border-bottom: 1px solid #eee; padding-bottom: 3px; margin-bottom: 5px; }
           .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
@@ -576,7 +579,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         <div class="header">
           <div class="logo">
              ${appSettings.logoUrl ? `<img src="${appSettings.logoUrl}" />` : ''}
-             ${appSettings.appName}
+             <div class="company-info">
+                <div class="company-name">${appSettings.appName}</div>
+                ${appSettings.address ? `<div class="company-address">${appSettings.address} ${appSettings.city ? `- ${appSettings.city}` : ''}</div>` : ''}
+             </div>
           </div>
           <div class="order-id">${isQuote ? 'Orçamento' : 'Pedido'} #${viewingOrder.id}</div>
         </div>
@@ -872,7 +878,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             )}
         </div>
 
-        {/* --- ORDERS & QUOTES TAB --- */}
+        {/* ... (Orders Table, Employees Table same as before, omitted for brevity but logic implies they are rendered based on activeTab) ... */}
         {(activeTab === 'orders' || activeTab === 'quotes') && (
             <div className="space-y-4">
                 {/* Search Bar & Filter */}
@@ -1047,7 +1053,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             </div>
         )}
 
-        {/* ... (Existing Employees Tab Code) ... */}
+        {/* ... (Employees Tab) ... */}
         {activeTab === 'employees' && isAdmin && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
              <div className="overflow-x-auto">
@@ -1106,7 +1112,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
          </div>
         )}
 
-        {/* ... (Existing Settings Tab Code) ... */}
+        {/* --- SETTINGS TAB WITH NEW ADDRESS FIELD --- */}
         {activeTab === 'settings' && isAdmin && (
             <div className="max-w-2xl mx-auto">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1163,6 +1169,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         </div>
 
                         <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Endereço da Empresa (Exibido na Impressão/Rastreio)</label>
+                            <input 
+                                type="text" 
+                                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:outline-none"
+                                value={settingsForm.address || ''}
+                                onChange={e => setSettingsForm({...settingsForm, address: e.target.value})}
+                                placeholder="Ex: Rua das Flores, 123 - Centro"
+                            />
+                        </div>
+
+                        <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Logo do Aplicativo</label>
                             <div className="flex items-center gap-6">
                                 <div className="w-24 h-24 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
@@ -1206,7 +1223,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         {/* ... (Existing Subscription Tab Code) ... */}
         {activeTab === 'subscription' && isAdmin && (
             <div className="max-w-3xl mx-auto">
-                {/* ... (Subscription UI code omitted for brevity as it is unchanged) ... */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white">
                         <div className="flex justify-between items-start">
@@ -1277,7 +1293,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
       </div>
 
-      {/* ... (Existing New Employee Modal) ... */}
+      {/* ... (Existing Modals: Employee, Order, etc. - Content mostly same, just updating full file for context) ... */}
       {showNewEmployeeModal && isAdmin && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">

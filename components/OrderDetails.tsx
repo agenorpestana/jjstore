@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Order, AppSettings } from '../types';
-import { MapPin, Calendar, CreditCard, Camera, X, ShoppingCart } from 'lucide-react';
+import { MapPin, Calendar, CreditCard, Camera, X, ShoppingCart, Building } from 'lucide-react';
 
 interface OrderDetailsProps {
   order: Order;
@@ -59,7 +59,7 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
                 <MapPin size={24} />
             </div>
             <div>
-                <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Entrega</h4>
+                <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Entrega para</h4>
                 <p className="text-gray-800 font-medium">{order.customerName}</p>
                 <p className="text-gray-600 text-sm mt-1">{order.shippingAddress}</p>
                 {order.customerPhone && (
@@ -199,6 +199,21 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
              </div>
         </div>
       </div>
+
+      {/* Company Address Block (New) */}
+      {(appSettings.address || appSettings.city) && (
+          <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+              <div className="bg-gray-100 p-3 rounded-lg text-gray-600">
+                  <Building size={24} />
+              </div>
+              <div>
+                  <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Local de Retirada / Envio</h4>
+                  <p className="text-gray-800 font-medium">{appSettings.businessName || appSettings.appName}</p>
+                  <p className="text-gray-600 text-sm">{appSettings.address}</p>
+                  <p className="text-gray-500 text-xs">{appSettings.city}</p>
+              </div>
+          </div>
+      )}
 
       {/* Lightbox Modal */}
       {expandedImage && (

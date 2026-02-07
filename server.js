@@ -634,17 +634,18 @@ app.get('/api/settings', async (req, res) => {
             query += ' WHERE company_id = ?';
             params.push(companyId);
         } else {
-            return res.json({ appName: 'Rastreaê', logoUrl: '', businessName: '', cnpj: '', city: '' });
+            return res.json({ appName: 'Rastreaê', logoUrl: '', businessName: '', cnpj: '', city: '', address: '' });
         }
 
         const [rows] = await pool.query(query, params);
-        const settings = { appName: 'Rastreaê', logoUrl: '', businessName: '', cnpj: '', city: '' };
+        const settings = { appName: 'Rastreaê', logoUrl: '', businessName: '', cnpj: '', city: '', address: '' };
         rows.forEach(row => {
             if (row.setting_key === 'appName') settings.appName = row.setting_value;
             if (row.setting_key === 'logoUrl') settings.logoUrl = row.setting_value;
             if (row.setting_key === 'businessName') settings.businessName = row.setting_value;
             if (row.setting_key === 'cnpj') settings.cnpj = row.setting_value;
             if (row.setting_key === 'city') settings.city = row.setting_value;
+            if (row.setting_key === 'address') settings.address = row.setting_value;
         });
         res.json(settings);
     } catch (err) {
@@ -658,7 +659,7 @@ app.post('/api/settings', async (req, res) => {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(401).json({ error: 'Company ID required' });
 
-        const { appName, logoUrl, businessName, cnpj, city } = req.body;
+        const { appName, logoUrl, businessName, cnpj, city, address } = req.body;
         
         const upsert = async (key, val) => {
              await pool.query('INSERT INTO app_settings (setting_key, setting_value, company_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = ?', [key, val, companyId, val]);
@@ -669,6 +670,7 @@ app.post('/api/settings', async (req, res) => {
         await upsert('businessName', businessName || '');
         await upsert('cnpj', cnpj || '');
         await upsert('city', city || '');
+        await upsert('address', address || '');
         
         res.json({ message: 'Settings updated' });
     } catch (err) {

@@ -100,6 +100,7 @@ export interface AppSettings {
   businessName?: string;
   cnpj?: string;
   city?: string;
+  address?: string;
 }
 
 export interface Plan {
