@@ -207,7 +207,7 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
                   <Building size={24} />
               </div>
               <div>
-                  <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Local de Retirada / Envio</h4>
+                  <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Endereço de Retirada</h4>
                   <p className="text-gray-800 font-medium">{appSettings.businessName || appSettings.appName}</p>
                   <p className="text-gray-600 text-sm">{appSettings.address}</p>
                   <p className="text-gray-500 text-xs">{appSettings.city}</p>

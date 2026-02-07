@@ -878,7 +878,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             )}
         </div>
 
-        {/* ... (Orders Table, Employees Table same as before, omitted for brevity but logic implies they are rendered based on activeTab) ... */}
+        {/* --- ORDERS & QUOTES TAB --- */}
         {(activeTab === 'orders' || activeTab === 'quotes') && (
             <div className="space-y-4">
                 {/* Search Bar & Filter */}
@@ -1053,7 +1053,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             </div>
         )}
 
-        {/* ... (Employees Tab) ... */}
+        {/* ... (Existing Employees Tab Code) ... */}
         {activeTab === 'employees' && isAdmin && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
              <div className="overflow-x-auto">
@@ -1169,7 +1169,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Endereço da Empresa (Exibido na Impressão/Rastreio)</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Endereço de Retirada / Loja Física</label>
                             <input 
                                 type="text" 
                                 className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:outline-none"
@@ -1293,7 +1293,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
       </div>
 
-      {/* ... (Existing Modals: Employee, Order, etc. - Content mostly same, just updating full file for context) ... */}
+      {/* ... (Existing New Employee Modal) ... */}
       {showNewEmployeeModal && isAdmin && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
