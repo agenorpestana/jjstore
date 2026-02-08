@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart, Copy, Check, FileText, ArrowRight } from 'lucide-react';
 import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings } from '../types';
-import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, updateOrderPayments, convertQuoteToOrder } from '../services/mockData';
+import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, updateOrderPayments, convertQuoteToOrder, updateEmployee } from '../services/mockData';
 
 interface AdminDashboardProps {
   currentUser: Employee;
@@ -48,7 +48,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   // Modals
   const [showOrderModal, setShowOrderModal] = useState(false); // Used for New AND Edit
   const [isEditingFullOrder, setIsEditingFullOrder] = useState<string | null>(null); // ID of order being edited
+  
   const [showNewEmployeeModal, setShowNewEmployeeModal] = useState(false);
+  const [isEditingEmployee, setIsEditingEmployee] = useState(false);
+  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
   
   // Loading state specifically for submitting the order form (to handle big images)
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -397,10 +400,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     }
   };
 
-  // ... (New Employee Logic & Settings Logic omitted for brevity as they haven't changed much but are included in the full block below) ...
+  // --- Employee Management Logic ---
   const [newEmployeeForm, setNewEmployeeForm] = useState<NewEmployeeInput>({
       name: '', role: '', contact: '', login: '', password: '', accessLevel: 'user'
   });
+
+  const handleOpenNewEmployee = () => {
+      setNewEmployeeForm({ name: '', role: '', contact: '', login: '', password: '', accessLevel: 'user' });
+      setIsEditingEmployee(false);
+      setEditingEmployeeId(null);
+      setShowNewEmployeeModal(true);
+  }
+
+  const handleOpenEditEmployee = (emp: Employee) => {
+      setNewEmployeeForm({ 
+          name: emp.name, 
+          role: emp.role, 
+          contact: emp.contact, 
+          login: emp.login || '', 
+          password: emp.password || '', // Shows current password for editing
+          accessLevel: emp.accessLevel 
+      });
+      setIsEditingEmployee(true);
+      setEditingEmployeeId(emp.id);
+      setShowNewEmployeeModal(true);
+  }
 
   const handleSubmitEmployee = async () => {
       if (!isAdmin) return;
@@ -408,10 +432,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           alert('Preencha todos os campos obrigatórios.');
           return;
       }
-      await createEmployee(newEmployeeForm);
-      setShowNewEmployeeModal(false);
-      setNewEmployeeForm({ name: '', role: '', contact: '', login: '', password: '', accessLevel: 'user' });
-      refreshEmployees();
+      
+      try {
+          if (isEditingEmployee && editingEmployeeId) {
+              await updateEmployee(editingEmployeeId, newEmployeeForm);
+              alert('Funcionário atualizado com sucesso!');
+          } else {
+              await createEmployee(newEmployeeForm);
+              alert('Funcionário cadastrado com sucesso!');
+          }
+          setShowNewEmployeeModal(false);
+          refreshEmployees();
+      } catch (err: any) {
+          alert('Erro ao salvar funcionário: ' + err.message);
+      }
   }
 
   const handleDeleteEmployee = async (id: string) => {
@@ -869,7 +903,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             {/* Only show 'New Employee' button if in employees tab AND is admin */}
             {activeTab === 'employees' && isAdmin && (
                 <button 
-                    onClick={() => setShowNewEmployeeModal(true)} 
+                    onClick={handleOpenNewEmployee} 
                     className="bg-primary hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors shadow-sm"
                 >
                     <Plus size={16} /> Novo Funcionário
@@ -1105,12 +1139,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                          {emp.admittedDate}
                          </td>
                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                         <button 
-                             onClick={() => handleDeleteEmployee(emp.id)}
-                             className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition"
-                         >
-                             <Trash2 size={16} />
-                         </button>
+                         <div className="flex justify-end gap-2">
+                             <button 
+                                 onClick={() => handleOpenEditEmployee(emp)}
+                                 className="text-blue-500 hover:text-blue-700 p-2 rounded-full hover:bg-blue-50 transition"
+                                 title="Editar Funcionário / Trocar Senha"
+                             >
+                                 <Edit2 size={16} />
+                             </button>
+                             <button 
+                                 onClick={() => handleDeleteEmployee(emp.id)}
+                                 className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition"
+                                 title="Excluir Funcionário"
+                             >
+                                 <Trash2 size={16} />
+                             </button>
+                         </div>
                          </td>
                      </tr>
                      ))}
@@ -1120,7 +1164,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
          </div>
         )}
 
-        {/* --- SETTINGS TAB WITH NEW ADDRESS FIELD --- */}
+        {/* ... (Existing Settings Tab) ... */}
         {activeTab === 'settings' && isAdmin && (
             <div className="max-w-2xl mx-auto">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1301,12 +1345,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
       </div>
 
-      {/* ... (Existing New Employee Modal) ... */}
+      {/* ... (Existing New Employee Modal - REUSED FOR EDIT) ... */}
       {showNewEmployeeModal && isAdmin && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <h3 className="font-bold text-lg text-gray-800">Novo Funcionário</h3>
+                    <h3 className="font-bold text-lg text-gray-800">
+                        {isEditingEmployee ? 'Editar Funcionário' : 'Novo Funcionário'}
+                    </h3>
                     <button onClick={() => setShowNewEmployeeModal(false)}><X className="text-gray-400 hover:text-gray-600" /></button>
                 </div>
                 <div className="p-6 space-y-4">
@@ -1359,7 +1405,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                              <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">Senha</label>
                                 <input 
-                                    type="password" 
+                                    type="text" 
+                                    placeholder={isEditingEmployee ? "Nova Senha" : ""}
                                     className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-primary focus:outline-none text-sm"
                                     value={newEmployeeForm.password}
                                     onChange={e => setNewEmployeeForm({...newEmployeeForm, password: e.target.value})}
@@ -1400,14 +1447,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         onClick={handleSubmitEmployee} 
                         className="w-full bg-primary text-white font-medium py-2.5 rounded-lg hover:bg-blue-700 mt-2"
                     >
-                        Cadastrar Funcionário
+                        {isEditingEmployee ? 'Salvar Alterações' : 'Cadastrar Funcionário'}
                     </button>
                 </div>
             </div>
           </div>
       )}
 
-      {/* ... (Order Modal - UPDATED for Quote Logic) ... */}
+      {/* ... (Order Modal) ... */}
       {showOrderModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">

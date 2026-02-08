@@ -976,6 +976,28 @@ app.post('/api/employees', async (req, res) => {
     }
 });
 
+// NOVO: Rota de Edição de Funcionário
+app.put('/api/employees/:id', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+        
+        const emp = req.body;
+        const empId = req.params.id;
+
+        // Atualiza nome, cargo, contato, login, senha e nível de acesso
+        // A senha será atualizada diretamente (texto plano conforme implementação atual)
+        await pool.query(
+            `UPDATE employees SET name=?, role=?, contact=?, login=?, password=?, accessLevel=? WHERE id=? AND company_id=?`,
+            [emp.name, emp.role, emp.contact, emp.login, emp.password, emp.accessLevel, empId, companyId]
+        );
+        res.json({ message: 'Employee updated' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.delete('/api/employees/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM employees WHERE id = ?', [req.params.id]);

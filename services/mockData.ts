@@ -452,6 +452,15 @@ export const createEmployee = async (input: NewEmployeeInput): Promise<Employee>
     return handleResponse(response);
 };
 
+export const updateEmployee = async (id: string, input: NewEmployeeInput): Promise<void> => {
+    const response = await fetch(`${API_URL}/employees/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(input)
+    });
+    await handleResponse(response);
+};
+
 export const deleteEmployee = async (id: string): Promise<void> => {
     const response = await fetch(`${API_URL}/employees/${id}`, { 
         method: 'DELETE',
