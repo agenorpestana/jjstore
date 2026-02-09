@@ -13,6 +13,52 @@ interface AdminDashboardProps {
 
 type Tab = 'orders' | 'quotes' | 'employees' | 'settings' | 'subscription';
 
+// --- Função Auxiliar de Compressão de Imagem ---
+const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                // Redimensiona para max 1280px (bom equilíbrio entre qualidade e tamanho)
+                const MAX_WIDTH = 1280;
+                const MAX_HEIGHT = 1280;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, width, height);
+                    // Comprime para JPEG com 70% de qualidade
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    resolve(dataUrl);
+                } else {
+                    reject(new Error("Erro ao processar imagem"));
+                }
+            };
+            img.onerror = (err) => reject(err);
+        };
+        reader.onerror = (err) => reject(err);
+    });
+};
+
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onLogout, appSettings, onUpdateSettings }) => {
   const [activeTab, setActiveTab] = useState<Tab>('orders');
   const [orders, setOrders] = useState<Order[]>([]);
@@ -55,6 +101,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   
   // Loading state specifically for submitting the order form (to handle big images)
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // New state for image processing
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   // Status & View Modals
   const [managingStatusOrder, setManagingStatusOrder] = useState<Order | null>(null);
@@ -206,6 +254,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     setEditingItemIndex(null);
     setIsEditingFullOrder(null);
     setIsSubmitting(false);
+    setIsProcessingImage(false);
   }
 
   const handleOpenNewOrder = () => {
@@ -322,12 +371,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       }
   }
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (files && files[0]) {
-          // Check file size (e.g., limit to 10MB per file client-side)
-          if (files[0].size > 10 * 1024 * 1024) {
-              alert('A imagem é muito grande (Máx 10MB). Por favor, comprima a imagem antes de enviar.');
+          // Check file size limit (apenas para arquivos absurdamente grandes, pois vamos comprimir)
+          if (files[0].size > 50 * 1024 * 1024) {
+              alert('A imagem é muito grande (Máx 50MB).');
               e.target.value = '';
               return;
           }
@@ -335,18 +384,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           // Increase limit to 6
           if (orderForm.photos.length >= 6) {
               alert('Máximo de 6 fotos permitidas.');
+              e.target.value = '';
               return;
           }
-          const reader = new FileReader();
-          reader.onloadend = () => {
-              if (typeof reader.result === 'string') {
-                  setOrderForm(prev => ({...prev, photos: [...prev.photos, reader.result as string]}));
-              }
-          };
-          reader.readAsDataURL(files[0]);
+
+          setIsProcessingImage(true);
+          try {
+              const compressedBase64 = await compressImage(files[0]);
+              setOrderForm(prev => ({...prev, photos: [...prev.photos, compressedBase64]}));
+          } catch (err) {
+              console.error("Erro ao comprimir imagem:", err);
+              alert("Erro ao processar a imagem. Tente outra foto.");
+          } finally {
+              setIsProcessingImage(false);
+              // Reset input
+              e.target.value = '';
+          }
       }
-      // Reset input
-      e.target.value = '';
   }
 
   const handleRemovePhoto = (index: number) => {
@@ -1606,10 +1660,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                       ))}
                       
                       {orderForm.photos.length < 6 && (
-                          <label className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary hover:text-primary text-gray-400 transition">
-                              <Upload size={20} />
-                              <span className="text-xs mt-1">Add</span>
-                              <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                          <label className={`w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary hover:text-primary text-gray-400 transition ${isProcessingImage ? 'opacity-50 cursor-wait' : ''}`}>
+                              {isProcessingImage ? (
+                                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                  <>
+                                    <Upload size={20} />
+                                    <span className="text-xs mt-1">Add</span>
+                                  </>
+                              )}
+                              <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={isProcessingImage} />
                           </label>
                       )}
                   </div>
@@ -1741,8 +1801,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
               <button onClick={() => setShowOrderModal(false)} className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg">Cancelar</button>
               <button 
                 onClick={handleSubmitOrder} 
-                disabled={isSubmitting}
-                className={`px-4 py-2 bg-primary text-white font-medium rounded-lg hover:bg-blue-700 flex items-center gap-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                disabled={isSubmitting || isProcessingImage}
+                className={`px-4 py-2 bg-primary text-white font-medium rounded-lg hover:bg-blue-700 flex items-center gap-2 ${isSubmitting || isProcessingImage ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
                   {isSubmitting ? (
                     <>
