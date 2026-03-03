@@ -73,6 +73,7 @@ export interface Transaction {
   description: string;
   amount: number;
   date: string;
+  paymentMethod?: string;
   orderId?: string; // Optional, for automatic revenue from orders
 }
 

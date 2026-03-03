@@ -1,27 +1,38 @@
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Calendar, FileText, Search, Filter } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Calendar, FileText, Search, Filter, Edit2, X } from 'lucide-react';
 import { Transaction } from '../types';
-import { getTransactions, createTransaction, deleteTransaction } from '../services/mockData';
+import { getTransactions, createTransaction, deleteTransaction, updateTransaction } from '../services/mockData';
 
 export const FinanceModule: React.FC = () => {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [typeFilter, setTypeFilter] = useState<'all' | 'revenue' | 'expense'>('all');
+
+    // Date Range State
+    const [startDate, setStartDate] = useState(() => {
+        const date = new Date();
+        return new Date(date.getFullYear(), date.getMonth(), 1).toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => {
+        return new Date().toISOString().split('T')[0];
+    });
 
     const [form, setForm] = useState({
         type: 'revenue' as 'revenue' | 'expense',
         description: '',
         amount: '',
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0],
+        paymentMethod: 'Pix'
     });
 
     const loadTransactions = async () => {
         setLoading(true);
         try {
-            const data = await getTransactions();
+            const data = await getTransactions(startDate, endDate);
             setTransactions(data);
         } catch (err) {
             console.error("Error loading transactions:", err);
@@ -32,24 +43,56 @@ export const FinanceModule: React.FC = () => {
 
     useEffect(() => {
         loadTransactions();
-    }, []);
+    }, [startDate, endDate]);
 
-    const handleAddTransaction = async (e: React.FormEvent) => {
+    const handleOpenModal = (transaction?: Transaction) => {
+        if (transaction) {
+            setEditingTransaction(transaction);
+            // Convert DD/MM/YYYY to YYYY-MM-DD for input[type="date"]
+            const [d, m, y] = transaction.date.split('/');
+            setForm({
+                type: transaction.type,
+                description: transaction.description,
+                amount: transaction.amount.toString(),
+                date: `${y}-${m}-${d}`,
+                paymentMethod: transaction.paymentMethod || 'Pix'
+            });
+        } else {
+            setEditingTransaction(null);
+            setForm({ 
+                type: 'revenue', 
+                description: '', 
+                amount: '', 
+                date: new Date().toISOString().split('T')[0],
+                paymentMethod: 'Pix'
+            });
+        }
+        setShowModal(true);
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.description || !form.amount || !form.date) return;
 
         try {
-            await createTransaction({
+            const transactionData = {
                 type: form.type,
                 description: form.description,
                 amount: Number(form.amount),
-                date: form.date.split('-').reverse().join('/') // Format to DD/MM/YYYY
-            });
+                date: form.date.split('-').reverse().join('/'), // Format to DD/MM/YYYY
+                paymentMethod: form.paymentMethod
+            };
+
+            if (editingTransaction) {
+                await updateTransaction(editingTransaction.id, transactionData);
+            } else {
+                await createTransaction(transactionData);
+            }
+            
             setShowModal(false);
-            setForm({ type: 'revenue', description: '', amount: '', date: new Date().toISOString().split('T')[0] });
             loadTransactions();
         } catch (err) {
-            alert("Erro ao adicionar transação");
+            alert("Erro ao salvar transação");
         }
     };
 
@@ -65,7 +108,7 @@ export const FinanceModule: React.FC = () => {
 
     const filteredTransactions = transactions.filter(t => {
         const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              (t.orderId && t.orderId.toLowerCase().includes(searchTerm.toLowerCase()));
+                               (t.orderId && t.orderId.toLowerCase().includes(searchTerm.toLowerCase()));
         const matchesType = typeFilter === 'all' || t.type === typeFilter;
         return matchesSearch && matchesType;
     });
@@ -80,6 +123,29 @@ export const FinanceModule: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+            {/* Date Range Picker */}
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm font-medium text-gray-600">Período:</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <input 
+                        type="date" 
+                        className="bg-gray-50 border-none rounded-xl text-sm px-3 py-2 focus:ring-2 focus:ring-primary/20"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                    />
+                    <span className="text-gray-400">até</span>
+                    <input 
+                        type="date" 
+                        className="bg-gray-50 border-none rounded-xl text-sm px-3 py-2 focus:ring-2 focus:ring-primary/20"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                    />
+                </div>
+            </div>
+
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -139,7 +205,7 @@ export const FinanceModule: React.FC = () => {
                     </select>
                 </div>
                 <button 
-                    onClick={() => setShowModal(true)}
+                    onClick={() => handleOpenModal()}
                     className="w-full md:w-auto flex items-center justify-center gap-2 bg-primary text-white px-6 py-2 rounded-xl font-medium hover:bg-primary/90 transition-colors"
                 >
                     <Plus className="w-4 h-4" />
@@ -170,14 +236,19 @@ export const FinanceModule: React.FC = () => {
                                     <td colSpan={5} className="px-6 py-12 text-center text-gray-400">Nenhuma transação encontrada.</td>
                                 </tr>
                             ) : filteredTransactions.map((t) => (
-                                <tr key={t.id} className="hover:bg-gray-50/50 transition-colors">
+                                <tr key={t.id} className="hover:bg-gray-50/50 transition-colors group">
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{t.date}</td>
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col">
                                             <span className="text-sm font-medium text-gray-900">{t.description}</span>
-                                            {t.orderId && (
-                                                <span className="text-xs text-primary font-medium">Pedido: #{t.orderId}</span>
-                                            )}
+                                            <div className="flex items-center gap-2">
+                                                {t.paymentMethod && (
+                                                    <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded uppercase font-bold">{t.paymentMethod}</span>
+                                                )}
+                                                {t.orderId && (
+                                                    <span className="text-xs text-primary font-medium">Pedido: #{t.orderId}</span>
+                                                )}
+                                            </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -194,12 +265,22 @@ export const FinanceModule: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right">
                                         {!t.orderId && (
-                                            <button 
-                                                onClick={() => handleDelete(t.id)}
-                                                className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button 
+                                                    onClick={() => handleOpenModal(t)}
+                                                    className="p-2 text-gray-400 hover:text-primary transition-colors"
+                                                    title="Editar"
+                                                >
+                                                    <Edit2 className="w-4 h-4" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDelete(t.id)}
+                                                    className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                                                    title="Excluir"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         )}
                                     </td>
                                 </tr>
@@ -209,17 +290,19 @@ export const FinanceModule: React.FC = () => {
                 </div>
             </div>
 
-            {/* New Transaction Modal */}
+            {/* New/Edit Transaction Modal */}
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                     <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                            <h2 className="text-xl font-bold text-gray-900">Nova Transação</h2>
+                            <h2 className="text-xl font-bold text-gray-900">
+                                {editingTransaction ? 'Editar Transação' : 'Nova Transação'}
+                            </h2>
                             <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
-                                <Plus className="w-6 h-6 rotate-45" />
+                                <X className="w-6 h-6" />
                             </button>
                         </div>
-                        <form onSubmit={handleAddTransaction} className="p-6 space-y-4">
+                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
                             <div className="flex p-1 bg-gray-100 rounded-xl">
                                 <button 
                                     type="button"
@@ -283,11 +366,27 @@ export const FinanceModule: React.FC = () => {
                                 </div>
                             </div>
 
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Forma de Pagamento</label>
+                                <select 
+                                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-primary/20 text-sm"
+                                    value={form.paymentMethod}
+                                    onChange={(e) => setForm(f => ({...f, paymentMethod: e.target.value}))}
+                                >
+                                    <option value="Pix">Pix</option>
+                                    <option value="Dinheiro">Dinheiro</option>
+                                    <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                    <option value="Cartão de Débito">Cartão de Débito</option>
+                                    <option value="Transferência">Transferência</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </div>
+
                             <button 
                                 type="submit"
                                 className="w-full bg-primary text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all mt-4 active:scale-[0.98]"
                             >
-                                Salvar Transação
+                                {editingTransaction ? 'Atualizar Transação' : 'Salvar Transação'}
                             </button>
                         </form>
                     </div>

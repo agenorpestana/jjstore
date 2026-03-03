@@ -138,6 +138,7 @@ async function initDB() {
         description TEXT,
         amount DECIMAL(10, 2),
         date VARCHAR(20),
+        paymentMethod VARCHAR(50),
         order_id VARCHAR(50),
         FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
       );
@@ -163,7 +164,8 @@ async function initDB() {
        "ALTER TABLE plans ADD COLUMN visible BOOLEAN DEFAULT TRUE",
        // New Quote Fields
        "ALTER TABLE orders ADD COLUMN quote_validity VARCHAR(20)",
-       "ALTER TABLE orders ADD COLUMN notes TEXT"
+       "ALTER TABLE orders ADD COLUMN notes TEXT",
+       "ALTER TABLE finance_transactions ADD COLUMN paymentMethod VARCHAR(50)"
     ];
 
     for (const query of migrationQueries) {
@@ -962,12 +964,29 @@ app.get('/api/finance/transactions', async (req, res) => {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
+        const { startDate, endDate } = req.query;
+
         // Get manual transactions
-        const [manualRows] = await pool.query('SELECT * FROM finance_transactions WHERE company_id = ?', [companyId]);
+        let manualQuery = 'SELECT * FROM finance_transactions WHERE company_id = ?';
+        const manualParams = [companyId];
+        
+        if (startDate && endDate) {
+            manualQuery += " AND STR_TO_DATE(date, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')";
+            manualParams.push(startDate, endDate);
+        }
+
+        const [manualRows] = await pool.query(manualQuery, manualParams);
         
         // Get order payments
-        // We need to parse the paymentMethod string which looks like "Pix (R$ 50,00) + Dinheiro (R$ 20,00)"
-        const [orderRows] = await pool.query('SELECT id, customerName, orderDate, paymentMethod, downPayment FROM orders WHERE company_id = ? AND downPayment > 0', [companyId]);
+        let orderQuery = 'SELECT id, customerName, orderDate, paymentMethod, downPayment FROM orders WHERE company_id = ? AND downPayment > 0';
+        const orderParams = [companyId];
+
+        if (startDate && endDate) {
+            orderQuery += " AND STR_TO_DATE(orderDate, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')";
+            orderParams.push(startDate, endDate);
+        }
+
+        const [orderRows] = await pool.query(orderQuery, orderParams);
         
         const orderTransactions = [];
         orderRows.forEach(order => {
@@ -987,13 +1006,13 @@ app.get('/api/finance/transactions', async (req, res) => {
                     description: `Pagamento Pedido #${order.id} - ${order.customerName} (${methodName})`,
                     amount: amount,
                     date: order.orderDate,
+                    paymentMethod: methodName,
                     orderId: order.id
                 });
             });
         });
 
         const allTransactions = [...manualRows, ...orderTransactions].sort((a, b) => {
-            // Sort by date (DD/MM/YYYY) descending
             const parseDate = (d) => {
                 const [day, month, year] = d.split('/');
                 return new Date(year, month - 1, day).getTime();
@@ -1012,15 +1031,33 @@ app.post('/api/finance/transactions', async (req, res) => {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
-        const { type, description, amount, date, orderId } = req.body;
+        const { type, description, amount, date, paymentMethod, orderId } = req.body;
         const id = `TX-${Date.now()}`;
 
         await pool.query(
-            'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, order_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [id, companyId, type, description, amount, date, orderId || null]
+            'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, paymentMethod, order_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, companyId, type, description, amount, date, paymentMethod || null, orderId || null]
         );
 
-        res.status(201).json({ id, companyId, type, description, amount, date, orderId });
+        res.status(201).json({ id, companyId, type, description, amount, date, paymentMethod, orderId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/finance/transactions/:id', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        const { type, description, amount, date, paymentMethod } = req.body;
+
+        await pool.query(
+            'UPDATE finance_transactions SET type = ?, description = ?, amount = ?, date = ?, paymentMethod = ? WHERE id = ? AND company_id = ?',
+            [type, description, amount, date, paymentMethod, req.params.id, companyId]
+        );
+
+        res.json({ id: req.params.id, type, description, amount, date, paymentMethod });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

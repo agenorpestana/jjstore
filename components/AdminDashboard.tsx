@@ -62,13 +62,13 @@ const compressImage = (file: File): Promise<string> => {
 };
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onLogout, appSettings, onUpdateSettings }) => {
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  // Check Permissions
+  const isAdmin = currentUser.accessLevel === 'admin';
+
+  const [activeTab, setActiveTab] = useState<Tab>(isAdmin ? 'dashboard' : 'orders');
   const [orders, setOrders] = useState<Order[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Check Permissions
-  const isAdmin = currentUser.accessLevel === 'admin';
 
   // Subscription Warning Logic
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
@@ -918,12 +918,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         {/* Tabs & Actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
             <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm flex-wrap">
-                <button 
-                    onClick={() => setActiveTab('dashboard')}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                    <LayoutDashboard size={16} /> Dashboard
-                </button>
+                {isAdmin && (
+                    <button 
+                        onClick={() => setActiveTab('dashboard')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        <LayoutDashboard size={16} /> Dashboard
+                    </button>
+                )}
                 <button 
                     onClick={() => setActiveTab('orders')}
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'orders' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
@@ -991,7 +993,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         </div>
 
         {/* --- DASHBOARD TAB --- */}
-        {activeTab === 'dashboard' && <Dashboard />}
+        {activeTab === 'dashboard' && isAdmin && <Dashboard />}
 
         {/* --- FINANCE TAB --- */}
         {activeTab === 'finance' && isAdmin && <FinanceModule />}

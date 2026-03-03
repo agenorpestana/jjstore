@@ -429,8 +429,12 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus,
 };
 
 // --- Finance Functions ---
-export const getTransactions = async (): Promise<Transaction[]> => {
-    const response = await fetch(`${API_URL}/finance/transactions`, {
+export const getTransactions = async (startDate?: string, endDate?: string): Promise<Transaction[]> => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    
+    const response = await fetch(`${API_URL}/finance/transactions?${params.toString()}`, {
         headers: getHeaders()
     });
     return handleResponse(response);
@@ -439,6 +443,15 @@ export const getTransactions = async (): Promise<Transaction[]> => {
 export const createTransaction = async (input: Omit<Transaction, 'id' | 'companyId'>): Promise<Transaction> => {
     const response = await fetch(`${API_URL}/finance/transactions`, {
         method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(input)
+    });
+    return handleResponse(response);
+};
+
+export const updateTransaction = async (id: string, input: Omit<Transaction, 'id' | 'companyId'>): Promise<Transaction> => {
+    const response = await fetch(`${API_URL}/finance/transactions/${id}`, {
+        method: 'PUT',
         headers: getHeaders(),
         body: JSON.stringify(input)
     });
