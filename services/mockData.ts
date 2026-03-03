@@ -1,5 +1,5 @@
 
-import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, Plan, Company, SaasSettings } from '../types';
+import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, Plan, Company, SaasSettings, Transaction, DashboardData } from '../types';
 
 // Detecta se estamos rodando localmente ou em produção
 const getBaseUrl = () => {
@@ -426,6 +426,39 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus,
 
     await handleResponse(response);
     return getOrderById(orderId);
+};
+
+// --- Finance Functions ---
+export const getTransactions = async (): Promise<Transaction[]> => {
+    const response = await fetch(`${API_URL}/finance/transactions`, {
+        headers: getHeaders()
+    });
+    return handleResponse(response);
+};
+
+export const createTransaction = async (input: Omit<Transaction, 'id' | 'companyId'>): Promise<Transaction> => {
+    const response = await fetch(`${API_URL}/finance/transactions`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(input)
+    });
+    return handleResponse(response);
+};
+
+export const deleteTransaction = async (id: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/finance/transactions/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+    });
+    await handleResponse(response);
+};
+
+// --- Dashboard Functions ---
+export const getDashboardData = async (): Promise<DashboardData> => {
+    const response = await fetch(`${API_URL}/dashboard`, {
+        headers: getHeaders()
+    });
+    return handleResponse(response);
 };
 
 // --- Employee Functions ---

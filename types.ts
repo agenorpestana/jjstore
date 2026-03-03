@@ -66,6 +66,30 @@ export interface NewOrderInput {
   notes?: string;
 }
 
+export interface Transaction {
+  id: string;
+  companyId: string;
+  type: 'revenue' | 'expense';
+  description: string;
+  amount: number;
+  date: string;
+  orderId?: string; // Optional, for automatic revenue from orders
+}
+
+export interface DashboardData {
+  ordersPerMonth: number;
+  ordersPerDay: number;
+  statusCounts: {
+    [key in OrderStatus]?: number;
+  };
+  finance: {
+    totalRevenue: number;
+    totalExpenses: number;
+    totalReceivable: number;
+    paymentMethods: { name: string; value: number }[];
+  };
+}
+
 export type AccessLevel = 'admin' | 'user' | 'saas_admin';
 
 export interface Employee {

@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart, Copy, Check, FileText, ArrowRight } from 'lucide-react';
+import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart, Copy, Check, FileText, ArrowRight, LayoutDashboard, Wallet } from 'lucide-react';
 import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings } from '../types';
 import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, updateOrderPayments, convertQuoteToOrder, updateEmployee } from '../services/mockData';
+import { Dashboard } from './Dashboard';
+import { FinanceModule } from './FinanceModule';
 
 interface AdminDashboardProps {
   currentUser: Employee;
@@ -11,7 +13,7 @@ interface AdminDashboardProps {
   onUpdateSettings: () => void;
 }
 
-type Tab = 'orders' | 'quotes' | 'employees' | 'settings' | 'subscription';
+type Tab = 'dashboard' | 'orders' | 'quotes' | 'finance' | 'employees' | 'settings' | 'subscription';
 
 // --- Função Auxiliar de Compressão de Imagem ---
 const compressImage = (file: File): Promise<string> => {
@@ -60,7 +62,7 @@ const compressImage = (file: File): Promise<string> => {
 };
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onLogout, appSettings, onUpdateSettings }) => {
-  const [activeTab, setActiveTab] = useState<Tab>('orders');
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [orders, setOrders] = useState<Order[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -917,6 +919,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
             <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm flex-wrap">
                 <button 
+                    onClick={() => setActiveTab('dashboard')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                    <LayoutDashboard size={16} /> Dashboard
+                </button>
+                <button 
                     onClick={() => setActiveTab('orders')}
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'orders' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
                 >
@@ -928,6 +936,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 >
                     <FileText size={16} /> Orçamentos
                 </button>
+                {isAdmin && (
+                    <button 
+                        onClick={() => setActiveTab('finance')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'finance' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        <Wallet size={16} /> Financeiro
+                    </button>
+                )}
                 {isAdmin && (
                     <button 
                         onClick={() => setActiveTab('employees')}
@@ -973,6 +989,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 </button>
             )}
         </div>
+
+        {/* --- DASHBOARD TAB --- */}
+        {activeTab === 'dashboard' && <Dashboard />}
+
+        {/* --- FINANCE TAB --- */}
+        {activeTab === 'finance' && isAdmin && <FinanceModule />}
 
         {/* --- ORDERS & QUOTES TAB --- */}
         {(activeTab === 'orders' || activeTab === 'quotes') && (

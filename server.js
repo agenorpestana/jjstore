@@ -130,6 +130,17 @@ async function initDB() {
         PRIMARY KEY (setting_key, company_id),
         FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS finance_transactions (
+        id VARCHAR(50) PRIMARY KEY,
+        company_id VARCHAR(50),
+        type VARCHAR(20), -- 'revenue' or 'expense'
+        description TEXT,
+        amount DECIMAL(10, 2),
+        date VARCHAR(20),
+        order_id VARCHAR(50),
+        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+      );
     `;
 
     await pool.query(createTablesQuery);
@@ -940,6 +951,166 @@ app.patch('/api/orders/:id/payment-update', async (req, res) => {
         await pool.query('UPDATE orders SET downPayment = ?, paymentMethod = ? WHERE id = ?', 
             [downPayment, paymentMethod, req.params.id]);
         res.json({ message: 'Payments updated' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Finance Routes ---
+app.get('/api/finance/transactions', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        // Get manual transactions
+        const [manualRows] = await pool.query('SELECT * FROM finance_transactions WHERE company_id = ?', [companyId]);
+        
+        // Get order payments
+        // We need to parse the paymentMethod string which looks like "Pix (R$ 50,00) + Dinheiro (R$ 20,00)"
+        const [orderRows] = await pool.query('SELECT id, customerName, orderDate, paymentMethod, downPayment FROM orders WHERE company_id = ? AND downPayment > 0', [companyId]);
+        
+        const orderTransactions = [];
+        orderRows.forEach(order => {
+            const parts = (order.paymentMethod || '').split('+');
+            parts.forEach(p => {
+                const methodName = p.split('(')[0].trim();
+                const amountMatch = p.match(/R\$\s?([\d.,]+)/);
+                let amount = order.downPayment; // fallback
+                if (amountMatch) {
+                    amount = parseFloat(amountMatch[1].replace(/\./g, '').replace(',', '.'));
+                }
+                
+                orderTransactions.push({
+                    id: `ORDER-PY-${order.id}-${methodName}`,
+                    companyId: companyId,
+                    type: 'revenue',
+                    description: `Pagamento Pedido #${order.id} - ${order.customerName} (${methodName})`,
+                    amount: amount,
+                    date: order.orderDate,
+                    orderId: order.id
+                });
+            });
+        });
+
+        const allTransactions = [...manualRows, ...orderTransactions].sort((a, b) => {
+            // Sort by date (DD/MM/YYYY) descending
+            const parseDate = (d) => {
+                const [day, month, year] = d.split('/');
+                return new Date(year, month - 1, day).getTime();
+            };
+            return parseDate(b.date) - parseDate(a.date);
+        });
+
+        res.json(allTransactions);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/finance/transactions', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        const { type, description, amount, date, orderId } = req.body;
+        const id = `TX-${Date.now()}`;
+
+        await pool.query(
+            'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, order_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [id, companyId, type, description, amount, date, orderId || null]
+        );
+
+        res.status(201).json({ id, companyId, type, description, amount, date, orderId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/finance/transactions/:id', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        await pool.query('DELETE FROM finance_transactions WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+        res.json({ message: 'Transaction deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Dashboard Routes ---
+app.get('/api/dashboard', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        const now = new Date();
+        const todayStr = now.toLocaleDateString('pt-BR');
+        const monthStr = (now.getMonth() + 1).toString().padStart(2, '0') + '/' + now.getFullYear();
+
+        // Orders per month (simple check for month string in orderDate)
+        const [monthOrders] = await pool.query('SELECT COUNT(*) as count FROM orders WHERE company_id = ? AND orderDate LIKE ?', [companyId, `%/${monthStr}`]);
+        
+        // Orders per day
+        const [dayOrders] = await pool.query('SELECT COUNT(*) as count FROM orders WHERE company_id = ? AND orderDate = ?', [companyId, todayStr]);
+
+        // Status counts
+        const [statusRows] = await pool.query('SELECT currentStatus, COUNT(*) as count FROM orders WHERE company_id = ? GROUP BY currentStatus', [companyId]);
+        const statusCounts = {};
+        statusRows.forEach(row => {
+            statusCounts[row.currentStatus] = row.count;
+        });
+
+        // Finance stats
+        // 1. Revenue from transactions + Revenue from orders (downPayment)
+        // Note: Automatic revenue from orders is handled by summing downPayment from orders
+        const [transRevenue] = await pool.query('SELECT SUM(amount) as total FROM finance_transactions WHERE company_id = ? AND type = "revenue"', [companyId]);
+        const [orderRevenue] = await pool.query('SELECT SUM(downPayment) as total FROM orders WHERE company_id = ?', [companyId]);
+        
+        const totalRevenue = (parseFloat(transRevenue[0].total) || 0) + (parseFloat(orderRevenue[0].total) || 0);
+
+        // 2. Expenses from transactions
+        const [transExpenses] = await pool.query('SELECT SUM(amount) as total FROM finance_transactions WHERE company_id = ? AND type = "expense"', [companyId]);
+        const totalExpenses = parseFloat(transExpenses[0].total) || 0;
+
+        // 3. Receivable (Total orders - downPayment)
+        const [receivableRows] = await pool.query('SELECT SUM(total - downPayment) as total FROM orders WHERE company_id = ? AND currentStatus != "CANCELADO" AND currentStatus != "ORCAMENTO"', [companyId]);
+        const totalReceivable = parseFloat(receivableRows[0].total) || 0;
+
+        // 4. Payment methods distribution (from orders) - Current Month
+        const [paymentRows] = await pool.query(
+            'SELECT paymentMethod, downPayment FROM orders WHERE company_id = ? AND downPayment > 0 AND orderDate LIKE ?', 
+            [companyId, `%/${monthStr}`]
+        );
+        const methodMap = {};
+        paymentRows.forEach(row => {
+            // Basic parsing: "Pix (R$ 50,00)" -> "Pix"
+            const parts = row.paymentMethod.split('+');
+            parts.forEach(p => {
+                const methodName = p.split('(')[0].trim();
+                // Try to extract amount from "(R$ 50,00)"
+                const amountMatch = p.match(/R\$\s?([\d.,]+)/);
+                let amount = row.downPayment; // fallback
+                if (amountMatch) {
+                    amount = parseFloat(amountMatch[1].replace(/\./g, '').replace(',', '.'));
+                }
+                methodMap[methodName] = (methodMap[methodName] || 0) + amount;
+            });
+        });
+
+        const paymentMethods = Object.entries(methodMap).map(([name, value]) => ({ name, value }));
+
+        res.json({
+            ordersPerMonth: monthOrders[0].count,
+            ordersPerDay: dayOrders[0].count,
+            statusCounts,
+            finance: {
+                totalRevenue,
+                totalExpenses,
+                totalReceivable,
+                paymentMethods
+            }
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
