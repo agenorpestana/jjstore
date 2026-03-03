@@ -3,7 +3,13 @@ import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSetti
 
 // Detecta se estamos rodando localmente ou em produção
 const getBaseUrl = () => {
-    return '/api';
+    if (typeof window !== "undefined") {
+        if (window.location.hostname === 'localhost') {
+            return 'http://localhost:3002/api';
+        }
+        return '/api'; 
+    }
+    return 'http://localhost:3002/api';
 }
 
 const API_URL = getBaseUrl();

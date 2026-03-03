@@ -33,48 +33,9 @@ self.addEventListener('activate', (event) => {
 
 // Interceptação de requisições (Network First strategy)
 self.addEventListener('fetch', (event) => {
-  // Ignorar requisições que não sejam GET ou que sejam para outras origens (como APIs externas)
-  if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
-    return;
-  }
-
-  // Ignorar requisições para a API
-  if (event.request.url.includes('/api/')) {
-    return;
-  }
-
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Se a resposta for válida, clonar e salvar no cache (opcional, mas bom para performance)
-        if (response && response.status === 200 && response.type === 'basic') {
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return response;
-      })
-      .catch(async () => {
-        // Se falhar a rede, tenta buscar no cache
-        const cachedResponse = await caches.match(event.request);
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-
-        // Se for uma navegação e não estiver no cache, retorna o index.html
-        if (event.request.mode === 'navigate') {
-          return caches.match('/');
-        }
-
-        // Se chegarmos aqui, não temos o que retornar. 
-        // Não podemos retornar undefined, então deixamos a requisição falhar naturalmente
-        // ou retornamos uma resposta de erro básica.
-        return new Response('Network error occurred', {
-          status: 408,
-          statusText: 'Network error occurred',
-          headers: new Headers({ 'Content-Type': 'text/plain' }),
-        });
-      })
+    fetch(event.request).catch(() => {
+      return caches.match(event.request);
+    })
   );
 });
