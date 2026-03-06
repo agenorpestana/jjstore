@@ -845,6 +845,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">Pedido Feito</span>;
         case OrderStatus.EM_PRODUCAO:
             return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">Em Produção</span>;
+        case OrderStatus.AGUARDANDO_RETIRADA:
+            return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Aguardando Retirada</span>;
         case OrderStatus.CONCLUIDO:
             return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">Concluído</span>;
         case OrderStatus.CANCELADO:
@@ -1026,6 +1028,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                 <>
                                     <option value={OrderStatus.PEDIDO_FEITO}>Pedido Feito</option>
                                     <option value={OrderStatus.EM_PRODUCAO}>Em Produção</option>
+                                    <option value={OrderStatus.AGUARDANDO_RETIRADA}>Aguardando Retirada</option>
                                     <option value={OrderStatus.CONCLUIDO}>Concluído</option>
                                     <option value={OrderStatus.CANCELADO}>Cancelado</option>
                                 </>
@@ -1864,7 +1867,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
               <h4 className="text-sm font-medium text-gray-900 mb-3">Atualizar para:</h4>
               <div className="space-y-2">
-                {[OrderStatus.PEDIDO_FEITO, OrderStatus.EM_PRODUCAO, OrderStatus.CONCLUIDO].map((status) => (
+                {[OrderStatus.PEDIDO_FEITO, OrderStatus.EM_PRODUCAO, OrderStatus.AGUARDANDO_RETIRADA, OrderStatus.CONCLUIDO].map((status) => (
                   <button
                     key={status}
                     onClick={() => {
@@ -1879,6 +1882,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                     <span className="font-medium text-gray-700">
                        {status === OrderStatus.PEDIDO_FEITO && '📋 Pedido Feito'}
                        {status === OrderStatus.EM_PRODUCAO && '👕 Em Produção'}
+                       {status === OrderStatus.AGUARDANDO_RETIRADA && '📦 Aguardando Retirada'}
                        {status === OrderStatus.CONCLUIDO && '✅ Concluído'}
                     </span>
                     {status === managingStatusOrder.currentStatus && <CheckCircle size={16} className="text-green-500" />}

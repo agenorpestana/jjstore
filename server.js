@@ -5,20 +5,19 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createServer as createViteServer } from 'vite';
 import 'dotenv/config'; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 // Aumentando limite para 200mb para permitir múltiplas fotos em alta resolução
 app.use(bodyParser.json({ limit: '200mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '200mb' }));
-
-app.use(express.static(path.join(__dirname, 'dist')));
 
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -31,7 +30,7 @@ const dbConfig = {
 
 let pool;
 
-async function initDB() {
+async function startServer() {
   try {
     pool = mysql.createPool(dbConfig);
 
@@ -200,9 +199,6 @@ async function initDB() {
   } catch (error) {
     console.error('Error initializing database:', error);
   }
-}
-
-initDB();
 
 // --- MIDDLEWARE HELPERS ---
 const getCompanyId = (req) => {
@@ -1295,10 +1291,23 @@ app.get('/service-worker.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'service-worker.js'));
 });
 
-app.get(/^(?!\/api).+/, (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
+    // Vite middleware for development
+    if (process.env.NODE_ENV !== 'production') {
+        const vite = await createViteServer({
+            server: { middlewareMode: true },
+            appType: 'spa',
+        });
+        app.use(vite.middlewares);
+    } else {
+        app.use(express.static(path.join(__dirname, 'dist')));
+        app.get(/^(?!\/api).+/, (req, res) => {
+            res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+        });
+    }
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+    });
+}
+
+startServer();

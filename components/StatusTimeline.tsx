@@ -12,6 +12,7 @@ export const StatusTimeline: React.FC<StatusTimelineProps> = ({ timeline }) => {
     switch (status) {
       case OrderStatus.PEDIDO_FEITO: return <ClipboardList size={20} />;
       case OrderStatus.EM_PRODUCAO: return <Shirt size={20} />;
+      case OrderStatus.AGUARDANDO_RETIRADA: return <Package size={20} />;
       case OrderStatus.CONCLUIDO: return <CheckCircle size={20} />;
       default: return <ClipboardList size={20} />;
     }
@@ -21,6 +22,7 @@ export const StatusTimeline: React.FC<StatusTimelineProps> = ({ timeline }) => {
       switch (status) {
           case OrderStatus.PEDIDO_FEITO: return 'Pedido Feito';
           case OrderStatus.EM_PRODUCAO: return 'Em Produção';
+          case OrderStatus.AGUARDANDO_RETIRADA: return 'Aguardando Retirada';
           case OrderStatus.CONCLUIDO: return 'Concluído';
           case OrderStatus.CANCELADO: return 'Cancelado';
           default: return status;
