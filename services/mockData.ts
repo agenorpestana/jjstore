@@ -353,11 +353,11 @@ export const deleteOrder = async (id: string): Promise<void> => {
     await handleResponse(response);
 };
 
-export const registerPayment = async (id: string, amount: number, method: string): Promise<Order> => {
+export const registerPayment = async (id: string, amount: number, method: string, date?: string): Promise<Order> => {
     const response = await fetch(`${API_URL}/orders/${id}/payment`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ amount, method })
+        body: JSON.stringify({ amount, method, date })
     });
     await handleResponse(response);
     return getOrderById(id);

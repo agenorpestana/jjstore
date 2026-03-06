@@ -927,14 +927,19 @@ app.delete('/api/orders/:id', async (req, res) => {
 
 app.post('/api/orders/:id/payment', async (req, res) => {
     try {
-        const { amount, method } = req.body;
+        const { amount, method, date } = req.body;
         const [rows] = await pool.query('SELECT downPayment, paymentMethod FROM orders WHERE id = ?', [req.params.id]);
         if (rows.length === 0) return res.status(404).json({ error: 'Order not found' });
 
         const current = rows[0];
         const newDownPayment = parseFloat(current.downPayment) + amount;
         const currentMethods = current.paymentMethod || '';
-        const newPaymentMethod = currentMethods ? `${currentMethods} + ${method}` : method;
+        
+        // Formata o método incluindo a data se fornecida
+        const formattedDate = date ? date.split('-').reverse().join('/') : '';
+        const methodWithDate = formattedDate ? `${method} - ${formattedDate}` : method;
+        
+        const newPaymentMethod = currentMethods ? `${currentMethods} + ${methodWithDate}` : methodWithDate;
 
         await pool.query('UPDATE orders SET downPayment = ?, paymentMethod = ? WHERE id = ?', 
             [newDownPayment, newPaymentMethod, req.params.id]);
@@ -982,6 +987,8 @@ app.get('/api/finance/transactions', async (req, res) => {
         const orderParams = [companyId];
 
         if (startDate && endDate) {
+            // Se houver filtro de data, buscamos pedidos cuja data de criação OU data de algum pagamento esteja no range
+            // Para simplificar, mantemos a busca por orderDate, mas o ideal seria ter uma tabela de pagamentos
             orderQuery += " AND STR_TO_DATE(orderDate, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')";
             orderParams.push(startDate, endDate);
         }
@@ -991,24 +998,36 @@ app.get('/api/finance/transactions', async (req, res) => {
         const orderTransactions = [];
         orderRows.forEach(order => {
             const parts = (order.paymentMethod || '').split('+');
-            parts.forEach(p => {
-                const methodName = p.split('(')[0].trim();
-                const amountMatch = p.match(/R\$\s?([\d.,]+)/);
-                let amount = order.downPayment; // fallback
+            parts.forEach((p, index) => {
+                const trimmedPart = p.trim();
+                if (!trimmedPart) return;
+
+                const methodName = trimmedPart.split('(')[0].trim();
+                const amountMatch = trimmedPart.match(/R\$\s?([\d.,]+)/);
+                
+                // Tenta extrair a data se existir no formato (Data: DD/MM/YYYY) ou similar
+                const dateMatch = trimmedPart.match(/(\d{2}\/\d{2}\/\d{4})/);
+                const transactionDate = dateMatch ? dateMatch[1] : order.orderDate;
+
+                let amount = 0;
                 if (amountMatch) {
                     amount = parseFloat(amountMatch[1].replace(/\./g, '').replace(',', '.'));
+                } else if (parts.length === 1) {
+                    amount = parseFloat(order.downPayment);
                 }
                 
-                orderTransactions.push({
-                    id: `ORDER-PY-${order.id}-${methodName}`,
-                    companyId: companyId,
-                    type: 'revenue',
-                    description: `Pagamento Pedido #${order.id} - ${order.customerName} (${methodName})`,
-                    amount: amount,
-                    date: order.orderDate,
-                    paymentMethod: methodName,
-                    orderId: order.id
-                });
+                if (amount > 0) {
+                    orderTransactions.push({
+                        id: `ORDER-PY-${order.id}-${index}-${methodName.replace(/\s+/g, '-')}`,
+                        companyId: companyId,
+                        type: 'revenue',
+                        description: `Pagamento Pedido #${order.id} - ${order.customerName} (${methodName})`,
+                        amount: amount,
+                        date: transactionDate,
+                        paymentMethod: methodName,
+                        orderId: order.id
+                    });
+                }
             });
         });
 

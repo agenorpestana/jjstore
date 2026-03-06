@@ -114,6 +114,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   // Payment State for View Modal
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethodRemaining, setPaymentMethodRemaining] = useState('Pix');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Settings State
   const [settingsForm, setSettingsForm] = useState<AppSettings>(appSettings);
@@ -555,10 +556,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       const formattedAmount = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
       const methodWithAmount = `${paymentMethodRemaining} (${formattedAmount})`;
 
-      await registerPayment(viewingOrder.id, amount, methodWithAmount);
+      await registerPayment(viewingOrder.id, amount, methodWithAmount, paymentDate);
       setPaymentAmount('');
       setPaymentMethodRemaining('Pix'); 
-      
+      setPaymentDate(new Date().toISOString().split('T')[0]);      
       const updatedList = await getAllOrders();
       setOrders(updatedList);
       const updatedOrder = updatedList.find(o => o.id === viewingOrder.id) || null;
@@ -2139,6 +2140,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                                 className="flex-1 border border-blue-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                                 value={paymentAmount}
                                                 onChange={e => setPaymentAmount(e.target.value)}
+                                            />
+                                            <input 
+                                                type="date" 
+                                                className="w-32 border border-blue-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                                value={paymentDate}
+                                                onChange={e => setPaymentDate(e.target.value)}
                                             />
                                             <button 
                                                 onClick={handleRegisterPayment}

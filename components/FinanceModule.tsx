@@ -106,15 +106,22 @@ export const FinanceModule: React.FC = () => {
         }
     };
 
-    const filteredTransactions = transactions.filter(t => {
-        const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                               (t.orderId && t.orderId.toLowerCase().includes(searchTerm.toLowerCase()));
-        const matchesType = typeFilter === 'all' || t.type === typeFilter;
-        return matchesSearch && matchesType;
-    });
+    const filteredTransactions = React.useMemo(() => {
+        return transactions.filter(t => {
+            const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                   (t.orderId && t.orderId.toLowerCase().includes(searchTerm.toLowerCase()));
+            const matchesType = typeFilter === 'all' || t.type === typeFilter;
+            return matchesSearch && matchesType;
+        });
+    }, [transactions, searchTerm, typeFilter]);
 
-    const totalRevenue = transactions.filter(t => t.type === 'revenue').reduce((acc, t) => acc + Number(t.amount), 0);
-    const totalExpenses = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0);
+    const totalRevenue = React.useMemo(() => 
+        transactions.filter(t => t.type === 'revenue').reduce((acc, t) => acc + Number(t.amount), 0)
+    , [transactions]);
+
+    const totalExpenses = React.useMemo(() => 
+        transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0)
+    , [transactions]);
     const balance = totalRevenue - totalExpenses;
 
     const formatCurrency = (value: number) => {
