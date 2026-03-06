@@ -28,11 +28,13 @@ const dbConfig = {
   ssl: process.env.DB_USE_SSL === 'true' ? { rejectUnauthorized: false } : undefined
 };
 
-let pool;
+let pool = mysql.createPool(dbConfig);
 
-async function startServer() {
+async function initDatabase() {
   try {
-    pool = mysql.createPool(dbConfig);
+    // Test connection
+    await pool.getConnection();
+    console.log('Database pool created');
 
     const createTablesQuery = `
       CREATE TABLE IF NOT EXISTS plans (
@@ -139,6 +141,17 @@ async function startServer() {
         date VARCHAR(20),
         paymentMethod VARCHAR(50),
         order_id VARCHAR(50),
+        account_id VARCHAR(50),
+        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS financial_accounts (
+        id VARCHAR(50) PRIMARY KEY,
+        company_id VARCHAR(50),
+        name VARCHAR(100),
+        balance DECIMAL(10, 2) DEFAULT 0,
+        is_default BOOLEAN DEFAULT FALSE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
       );
     `;
@@ -150,20 +163,21 @@ async function startServer() {
        "ALTER TABLE orders ADD COLUMN pressingDate VARCHAR(20)",
        "ALTER TABLE orders ADD COLUMN printingDate VARCHAR(20)",
        "ALTER TABLE orders ADD COLUMN seamstress VARCHAR(100)",
+       "ALTER TABLE orders ADD COLUMN quote_validity VARCHAR(20)",
+       "ALTER TABLE orders ADD COLUMN notes TEXT",
+       "ALTER TABLE finance_transactions ADD COLUMN account_id VARCHAR(50)",
+       "ALTER TABLE financial_accounts ADD COLUMN is_default BOOLEAN DEFAULT FALSE",
        "ALTER TABLE order_items ADD COLUMN size VARCHAR(20)",
        "ALTER TABLE orders ADD COLUMN company_id VARCHAR(50)",
        "ALTER TABLE employees ADD COLUMN company_id VARCHAR(50)",
        "ALTER TABLE app_settings ADD COLUMN company_id VARCHAR(50)",
-       // New SaaS migrations
        "ALTER TABLE companies ADD COLUMN status VARCHAR(20) DEFAULT 'active'",
        "ALTER TABLE companies ADD COLUMN plan VARCHAR(50)",
        "ALTER TABLE companies ADD COLUMN trial_ends_at DATETIME",
        "ALTER TABLE companies ADD COLUMN next_payment_due DATETIME",
        "ALTER TABLE companies ADD COLUMN last_payment_date DATETIME",
+       "ALTER TABLE orders ADD COLUMN currentStatus VARCHAR(50)",
        "ALTER TABLE plans ADD COLUMN visible BOOLEAN DEFAULT TRUE",
-       // New Quote Fields
-       "ALTER TABLE orders ADD COLUMN quote_validity VARCHAR(20)",
-       "ALTER TABLE orders ADD COLUMN notes TEXT",
        "ALTER TABLE finance_transactions ADD COLUMN paymentMethod VARCHAR(50)"
     ];
 
@@ -172,6 +186,19 @@ async function startServer() {
             await pool.query(query);
         } catch (e) {
             // Ignora erros se coluna já existe
+        }
+    }
+
+    // Ensure every company has a default CAIXA ADMINISTRATIVO account
+    const [companies] = await pool.query('SELECT id FROM companies');
+    for (const company of companies) {
+        const [accounts] = await pool.query('SELECT id FROM financial_accounts WHERE company_id = ? AND is_default = TRUE', [company.id]);
+        if (accounts.length === 0) {
+            const accountId = `acc_default_${company.id}`;
+            await pool.query(
+                'INSERT INTO financial_accounts (id, company_id, name, balance, is_default) VALUES (?, ?, ?, ?, ?)',
+                [accountId, company.id, 'CAIXA ADMINISTRATIVO', 0, true]
+            );
         }
     }
 
@@ -199,14 +226,104 @@ async function startServer() {
   } catch (error) {
     console.error('Error initializing database:', error);
   }
+}
 
 // --- MIDDLEWARE HELPERS ---
 const getCompanyId = (req) => {
     return req.headers['x-company-id'] || null;
 }
 
-// --- CALCULATION HELPER ---
-function calculateNextDueDate(currentNextDue, trialEndsAt) {
+// --- ACCOUNTS HELPER ---
+async function ensureDefaultAccount(companyId) {
+    if (!companyId || companyId === 'null') return;
+    const [rows] = await pool.query('SELECT * FROM financial_accounts WHERE company_id = ? AND is_default = TRUE', [companyId]);
+    if (rows.length === 0) {
+        const id = 'acc_' + Math.random().toString(36).substr(2, 9);
+        await pool.query(
+            'INSERT INTO financial_accounts (id, company_id, name, balance, is_default) VALUES (?, ?, ?, ?, ?)',
+            [id, companyId, 'CAIXA ADMINISTRATIVO', 0, true]
+        );
+    }
+}
+
+// --- FINANCE ROUTES ---
+app.get('/api/finance/accounts', async (req, res) => {
+    const companyId = getCompanyId(req);
+    if (!companyId) return res.status(403).json({ error: 'Company ID required' });
+    try {
+        await ensureDefaultAccount(companyId);
+        const [rows] = await pool.query('SELECT * FROM financial_accounts WHERE company_id = ? ORDER BY is_default DESC, name ASC', [companyId]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/finance/accounts', async (req, res) => {
+    const companyId = getCompanyId(req);
+    if (!companyId) return res.status(403).json({ error: 'Company ID required' });
+    try {
+        const { name, balance } = req.body;
+        const id = 'acc_' + Math.random().toString(36).substr(2, 9);
+        await pool.query(
+            'INSERT INTO financial_accounts (id, company_id, name, balance) VALUES (?, ?, ?, ?)',
+            [id, companyId, name, balance || 0]
+        );
+        res.status(201).json({ id, name, balance });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/finance/accounts/:id', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM financial_accounts WHERE id = ?', [req.params.id]);
+        if (rows.length > 0 && rows[0].is_default) {
+            return res.status(400).json({ error: 'Cannot delete default account' });
+        }
+        await pool.query('DELETE FROM financial_accounts WHERE id = ?', [req.params.id]);
+        res.json({ message: 'Account deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/finance/transfers', async (req, res) => {
+    const companyId = getCompanyId(req);
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const { fromAccountId, toAccountId, amount, description, date } = req.body;
+        
+        // Update balances
+        await conn.query('UPDATE financial_accounts SET balance = balance - ? WHERE id = ?', [amount, fromAccountId]);
+        await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [amount, toAccountId]);
+        
+        // Record transactions
+        const id1 = 'trans_' + Math.random().toString(36).substr(2, 9);
+        const id2 = 'trans_' + Math.random().toString(36).substr(2, 9);
+        
+        await conn.query(
+            'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, account_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [id1, companyId, 'expense', `Transferência para outra conta: ${description}`, amount, date, fromAccountId]
+        );
+        
+        await conn.query(
+            'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, account_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [id2, companyId, 'revenue', `Transferência recebida: ${description}`, amount, date, toAccountId]
+        );
+        
+        await conn.commit();
+        res.json({ message: 'Transfer completed' });
+    } catch (err) {
+        await conn.rollback();
+        res.status(500).json({ error: err.message });
+    } finally {
+        conn.release();
+    }
+});
+
+const calculateNextDueDate = (currentNextDue, trialEndsAt) => {
     const now = new Date();
     let baseDate = now;
 
@@ -621,6 +738,13 @@ app.post('/api/register-company', async (req, res) => {
         await conn.query('INSERT INTO app_settings (setting_key, setting_value, company_id) VALUES (?, ?, ?)', ['appName', companyName, companyId]);
         await conn.query('INSERT INTO app_settings (setting_key, setting_value, company_id) VALUES (?, ?, ?)', ['logoUrl', '', companyId]);
 
+        // 4. Create Default Financial Account
+        const accountId = `acc_default_${companyId}`;
+        await conn.query(
+            'INSERT INTO financial_accounts (id, company_id, name, balance, is_default) VALUES (?, ?, ?, ?, ?)',
+            [accountId, companyId, 'CAIXA ADMINISTRATIVO', 0, true]
+        );
+
         await conn.commit();
         res.status(201).json({ message: 'Company registered successfully', companyId });
     } catch (err) {
@@ -710,7 +834,8 @@ app.get('/api/orders', async (req, res) => {
     const fullOrders = await Promise.all(orders.map(async (order) => {
       const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
       const [timeline] = await pool.query('SELECT * FROM order_timeline WHERE order_id = ?', [order.id]);
-      const [photos] = await pool.query('SELECT photo_data FROM order_photos WHERE order_id = ?', [order.id]);
+      // NÃO buscar fotos na listagem para performance
+      // const [photos] = await pool.query('SELECT photo_data FROM order_photos WHERE order_id = ?', [order.id]);
 
       return {
         ...order,
@@ -718,7 +843,7 @@ app.get('/api/orders', async (req, res) => {
         downPayment: parseFloat(order.downPayment),
         items: items.map(i => ({...i, price: parseFloat(i.price)})),
         timeline: timeline.map(t => ({...t, completed: !!t.completed})),
-        photos: photos.map(p => p.photo_data),
+        photos: [], // Lista vazia na listagem
         // Mapeamento correto para o Frontend
         quoteValidity: order.quote_validity,
         notes: order.notes
@@ -922,9 +1047,13 @@ app.delete('/api/orders/:id', async (req, res) => {
 });
 
 app.post('/api/orders/:id/payment', async (req, res) => {
+    const conn = await pool.getConnection();
     try {
-        const { amount, method, date } = req.body;
-        const [rows] = await pool.query('SELECT downPayment, paymentMethod FROM orders WHERE id = ?', [req.params.id]);
+        await conn.beginTransaction();
+        const { amount, method, date, accountId } = req.body;
+        const companyId = getCompanyId(req);
+        
+        const [rows] = await conn.query('SELECT downPayment, paymentMethod FROM orders WHERE id = ?', [req.params.id]);
         if (rows.length === 0) return res.status(404).json({ error: 'Order not found' });
 
         const current = rows[0];
@@ -937,13 +1066,31 @@ app.post('/api/orders/:id/payment', async (req, res) => {
         
         const newPaymentMethod = currentMethods ? `${currentMethods} + ${methodWithDate}` : methodWithDate;
 
-        await pool.query('UPDATE orders SET downPayment = ?, paymentMethod = ? WHERE id = ?', 
+        await conn.query('UPDATE orders SET downPayment = ?, paymentMethod = ? WHERE id = ?', 
             [newDownPayment, newPaymentMethod, req.params.id]);
         
+        // Update account balance if accountId is provided
+        if (accountId) {
+            await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [amount, accountId]);
+            
+            // Record transaction linked to account
+            const transId = 'trans_' + Math.random().toString(36).substr(2, 9);
+            const dateStr = date ? date.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR');
+            
+            await conn.query(
+                'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, paymentMethod, order_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [transId, companyId, 'revenue', `Pagamento Pedido #${req.params.id} (${method})`, amount, dateStr, method, req.params.id, accountId]
+            );
+        }
+        
+        await conn.commit();
         res.json({ message: 'Payment registered' });
     } catch (err) {
+        await conn.rollback();
         console.error(err);
         res.status(500).json({ error: err.message });
+    } finally {
+        conn.release();
     }
 });
 
@@ -965,67 +1112,85 @@ app.get('/api/finance/transactions', async (req, res) => {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
-        const { startDate, endDate } = req.query;
+        const { startDate, endDate, accountId } = req.query;
 
         // Get manual transactions
-        let manualQuery = 'SELECT * FROM finance_transactions WHERE company_id = ?';
+        let manualQuery = `
+            SELECT t.*, a.name as accountName 
+            FROM finance_transactions t 
+            LEFT JOIN financial_accounts a ON t.account_id = a.id 
+            WHERE t.company_id = ?
+        `;
         const manualParams = [companyId];
         
+        if (accountId && accountId !== 'all') {
+            manualQuery += " AND t.account_id = ?";
+            manualParams.push(accountId);
+        }
+
         if (startDate && endDate) {
-            manualQuery += " AND STR_TO_DATE(date, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')";
+            manualQuery += " AND STR_TO_DATE(t.date, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')";
             manualParams.push(startDate, endDate);
         }
 
         const [manualRows] = await pool.query(manualQuery, manualParams);
         
-        // Get order payments
-        let orderQuery = 'SELECT id, customerName, orderDate, paymentMethod, downPayment FROM orders WHERE company_id = ? AND downPayment > 0';
-        const orderParams = [companyId];
-
-        if (startDate && endDate) {
-            // Se houver filtro de data, buscamos pedidos cuja data de criação OU data de algum pagamento esteja no range
-            // Para simplificar, mantemos a busca por orderDate, mas o ideal seria ter uma tabela de pagamentos
-            orderQuery += " AND STR_TO_DATE(orderDate, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')";
-            orderParams.push(startDate, endDate);
-        }
-
-        const [orderRows] = await pool.query(orderQuery, orderParams);
+        // Se estiver filtrando por conta específica, não buscamos pagamentos de pedidos antigos que não tinham conta
+        // A menos que a conta seja a padrão e o usuário queira ver tudo (mas o usuário pediu para filtrar)
+        // Para manter compatibilidade, se accountId for 'all', buscamos tudo.
         
-        const orderTransactions = [];
-        orderRows.forEach(order => {
-            const parts = (order.paymentMethod || '').split('+');
-            parts.forEach((p, index) => {
-                const trimmedPart = p.trim();
-                if (!trimmedPart) return;
+        let orderTransactions = [];
+        if (!accountId || accountId === 'all') {
+            // Get order payments (legacy logic for orders without account_id in transactions)
+            // We only fetch orders where the transaction wasn't already recorded in finance_transactions
+            let orderQuery = 'SELECT id, customerName, orderDate, paymentMethod, downPayment FROM orders WHERE company_id = ? AND downPayment > 0';
+            const orderParams = [companyId];
 
-                const methodName = trimmedPart.split('(')[0].trim();
-                const amountMatch = trimmedPart.match(/R\$\s?([\d.,]+)/);
-                
-                // Tenta extrair a data se existir no formato (Data: DD/MM/YYYY) ou similar
-                const dateMatch = trimmedPart.match(/(\d{2}\/\d{2}\/\d{4})/);
-                const transactionDate = dateMatch ? dateMatch[1] : order.orderDate;
+            if (startDate && endDate) {
+                orderQuery += " AND STR_TO_DATE(orderDate, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')";
+                orderParams.push(startDate, endDate);
+            }
 
-                let amount = 0;
-                if (amountMatch) {
-                    amount = parseFloat(amountMatch[1].replace(/\./g, '').replace(',', '.'));
-                } else if (parts.length === 1) {
-                    amount = parseFloat(order.downPayment);
-                }
-                
-                if (amount > 0) {
-                    orderTransactions.push({
-                        id: `ORDER-PY-${order.id}-${index}-${methodName.replace(/\s+/g, '-')}`,
-                        companyId: companyId,
-                        type: 'revenue',
-                        description: `Pagamento Pedido #${order.id} - ${order.customerName} (${methodName})`,
-                        amount: amount,
-                        date: transactionDate,
-                        paymentMethod: methodName,
-                        orderId: order.id
-                    });
-                }
+            const [orderRows] = await pool.query(orderQuery, orderParams);
+            
+            orderRows.forEach(order => {
+                const parts = (order.paymentMethod || '').split('+');
+                parts.forEach((p, index) => {
+                    const trimmedPart = p.trim();
+                    if (!trimmedPart) return;
+
+                    const methodName = trimmedPart.split('(')[0].trim();
+                    const amountMatch = trimmedPart.match(/R\$\s?([\d.,]+)/);
+                    const dateMatch = trimmedPart.match(/(\d{2}\/\d{2}\/\d{4})/);
+                    const transactionDate = dateMatch ? dateMatch[1] : order.orderDate;
+
+                    let amount = 0;
+                    if (amountMatch) {
+                        amount = parseFloat(amountMatch[1].replace(/\./g, '').replace(',', '.'));
+                    } else if (parts.length === 1) {
+                        amount = parseFloat(order.downPayment);
+                    }
+                    
+                    if (amount > 0) {
+                        // Check if this specific payment part is already in manualRows (to avoid duplicates)
+                        const isDuplicate = manualRows.some(m => m.order_id === order.id && m.amount === amount && m.date === transactionDate);
+                        if (!isDuplicate) {
+                            orderTransactions.push({
+                                id: `ORDER-PY-${order.id}-${index}-${methodName.replace(/\s+/g, '-')}`,
+                                companyId: companyId,
+                                type: 'revenue',
+                                description: `Pagamento Pedido #${order.id} - ${order.customerName} (${methodName})`,
+                                amount: amount,
+                                date: transactionDate,
+                                paymentMethod: methodName,
+                                orderId: order.id,
+                                accountName: 'Não vinculada'
+                            });
+                        }
+                    }
+                });
             });
-        });
+        }
 
         const allTransactions = [...manualRows, ...orderTransactions].sort((a, b) => {
             const parseDate = (d) => {
@@ -1042,51 +1207,189 @@ app.get('/api/finance/transactions', async (req, res) => {
 });
 
 app.post('/api/finance/transactions', async (req, res) => {
+    const conn = await pool.getConnection();
     try {
+        await conn.beginTransaction();
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
-        const { type, description, amount, date, paymentMethod, orderId } = req.body;
+        const { type, description, amount, date, paymentMethod, orderId, accountId } = req.body;
         const id = `TX-${Date.now()}`;
 
-        await pool.query(
-            'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, paymentMethod, order_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [id, companyId, type, description, amount, date, paymentMethod || null, orderId || null]
+        await conn.query(
+            'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, paymentMethod, order_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, companyId, type, description, amount, date, paymentMethod || null, orderId || null, accountId || null]
         );
 
-        res.status(201).json({ id, companyId, type, description, amount, date, paymentMethod, orderId });
+        // Update account balance
+        if (accountId) {
+            const balanceChange = type === 'revenue' ? amount : -amount;
+            await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [balanceChange, accountId]);
+        }
+
+        await conn.commit();
+        res.status(201).json({ id, companyId, type, description, amount, date, paymentMethod, orderId, accountId });
     } catch (err) {
+        await conn.rollback();
         res.status(500).json({ error: err.message });
+    } finally {
+        conn.release();
     }
 });
 
 app.put('/api/finance/transactions/:id', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        const { type, description, amount, date, paymentMethod, accountId } = req.body;
+        const transactionId = req.params.id;
+
+        // Get old transaction to adjust balance
+        const [oldRows] = await conn.query('SELECT * FROM finance_transactions WHERE id = ? AND company_id = ?', [transactionId, companyId]);
+        if (oldRows.length > 0) {
+            const old = oldRows[0];
+            // Revert old balance
+            if (old.account_id) {
+                const oldBalanceChange = old.type === 'revenue' ? -old.amount : old.amount;
+                await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [oldBalanceChange, old.account_id]);
+            }
+        }
+
+        await conn.query(
+            'UPDATE finance_transactions SET type = ?, description = ?, amount = ?, date = ?, paymentMethod = ?, account_id = ? WHERE id = ? AND company_id = ?',
+            [type, description, amount, date, paymentMethod, accountId || null, transactionId, companyId]
+        );
+
+        // Apply new balance
+        if (accountId) {
+            const newBalanceChange = type === 'revenue' ? amount : -amount;
+            await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [newBalanceChange, accountId]);
+        }
+
+        await conn.commit();
+        res.json({ id: transactionId, type, description, amount, date, paymentMethod, accountId });
+    } catch (err) {
+        await conn.rollback();
+        res.status(500).json({ error: err.message });
+    } finally {
+        conn.release();
+    }
+});
+
+app.delete('/api/finance/transactions/:id', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        const transactionId = req.params.id;
+
+        // Get transaction to adjust balance
+        const [rows] = await conn.query('SELECT * FROM finance_transactions WHERE id = ? AND company_id = ?', [transactionId, companyId]);
+        if (rows.length > 0) {
+            const trans = rows[0];
+            if (trans.account_id) {
+                const balanceChange = trans.type === 'revenue' ? -trans.amount : trans.amount;
+                await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [balanceChange, trans.account_id]);
+            }
+        }
+
+        await conn.query('DELETE FROM finance_transactions WHERE id = ? AND company_id = ?', [transactionId, companyId]);
+        
+        await conn.commit();
+        res.json({ message: 'Transaction deleted' });
+    } catch (err) {
+        await conn.rollback();
+        res.status(500).json({ error: err.message });
+    } finally {
+        conn.release();
+    }
+});
+
+// --- Financial Accounts Routes ---
+app.get('/api/finance/accounts', async (req, res) => {
     try {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
-        const { type, description, amount, date, paymentMethod } = req.body;
-
-        await pool.query(
-            'UPDATE finance_transactions SET type = ?, description = ?, amount = ?, date = ?, paymentMethod = ? WHERE id = ? AND company_id = ?',
-            [type, description, amount, date, paymentMethod, req.params.id, companyId]
-        );
-
-        res.json({ id: req.params.id, type, description, amount, date, paymentMethod });
+        const [rows] = await pool.query('SELECT * FROM financial_accounts WHERE company_id = ?', [companyId]);
+        res.json(rows.map(r => ({ ...r, balance: parseFloat(r.balance), isDefault: !!r.is_default })));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.delete('/api/finance/transactions/:id', async (req, res) => {
+app.post('/api/finance/accounts', async (req, res) => {
     try {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
-        await pool.query('DELETE FROM finance_transactions WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
-        res.json({ message: 'Transaction deleted' });
+        const { name, balance } = req.body;
+        const id = `acc_${Date.now()}`;
+
+        await pool.query(
+            'INSERT INTO financial_accounts (id, company_id, name, balance, is_default) VALUES (?, ?, ?, ?, ?)',
+            [id, companyId, name, balance || 0, false]
+        );
+
+        res.status(201).json({ id, companyId, name, balance: balance || 0, isDefault: false });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/finance/accounts/:id', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        const [rows] = await pool.query('SELECT is_default FROM financial_accounts WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+        if (rows.length === 0) return res.status(404).json({ error: 'Account not found' });
+        if (rows[0].is_default) return res.status(400).json({ error: 'Cannot delete default account' });
+
+        await pool.query('DELETE FROM financial_accounts WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+        res.json({ message: 'Account deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/finance/transfers', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        const { fromAccountId, toAccountId, amount, date, description } = req.body;
+
+        // 1. Record Expense in source account
+        const expenseId = `TX-TRF-EXP-${Date.now()}`;
+        await conn.query(
+            'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, account_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [expenseId, companyId, 'expense', `Transferência para: ${description}`, amount, date, fromAccountId]
+        );
+        await conn.query('UPDATE financial_accounts SET balance = balance - ? WHERE id = ?', [amount, fromAccountId]);
+
+        // 2. Record Revenue in destination account
+        const revenueId = `TX-TRF-REV-${Date.now()}`;
+        await conn.query(
+            'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, account_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [revenueId, companyId, 'revenue', `Transferência de: ${description}`, amount, date, toAccountId]
+        );
+        await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [amount, toAccountId]);
+
+        await conn.commit();
+        res.status(201).json({ message: 'Transfer completed' });
+    } catch (err) {
+        await conn.rollback();
+        res.status(500).json({ error: err.message });
+    } finally {
+        conn.release();
     }
 });
 
@@ -1291,23 +1594,31 @@ app.get('/service-worker.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'service-worker.js'));
 });
 
-    // Vite middleware for development
-    if (process.env.NODE_ENV !== 'production') {
-        const vite = await createViteServer({
-            server: { middlewareMode: true },
-            appType: 'spa',
-        });
-        app.use(vite.middlewares);
-    } else {
-        app.use(express.static(path.join(__dirname, 'dist')));
-        app.get(/^(?!\/api).+/, (req, res) => {
-            res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-        });
-    }
+async function startServer() {
+    try {
+        // Vite middleware for development
+        if (process.env.NODE_ENV !== 'production') {
+            const vite = await createViteServer({
+                server: { middlewareMode: true },
+                appType: 'spa',
+            });
+            app.use(vite.middlewares);
+        } else {
+            app.use(express.static(path.join(__dirname, 'dist')));
+            app.get(/^(?!\/api).+/, (req, res) => {
+                res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+            });
+        }
 
-    app.listen(PORT, '0.0.0.0', () => {
-        console.log(`Server running on http://localhost:${PORT}`);
-    });
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Server running on http://localhost:${PORT}`);
+        });
+
+        // Initialize database in background
+        initDatabase();
+    } catch (err) {
+        console.error('Failed to start server:', err);
+    }
 }
 
 startServer();

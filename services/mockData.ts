@@ -1,5 +1,5 @@
 
-import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, Plan, Company, SaasSettings, Transaction, DashboardData } from '../types';
+import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, Plan, Company, SaasSettings, Transaction, DashboardData, FinancialAccount } from '../types';
 
 // Detecta se estamos rodando localmente ou em produção
 const getBaseUrl = () => {
@@ -353,11 +353,11 @@ export const deleteOrder = async (id: string): Promise<void> => {
     await handleResponse(response);
 };
 
-export const registerPayment = async (id: string, amount: number, method: string, date?: string): Promise<Order> => {
+export const registerPayment = async (id: string, amount: number, method: string, date?: string, accountId?: string): Promise<Order> => {
     const response = await fetch(`${API_URL}/orders/${id}/payment`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ amount, method, date })
+        body: JSON.stringify({ amount, method, date, accountId })
     });
     await handleResponse(response);
     return getOrderById(id);
@@ -429,10 +429,11 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus,
 };
 
 // --- Finance Functions ---
-export const getTransactions = async (startDate?: string, endDate?: string): Promise<Transaction[]> => {
+export const getTransactions = async (startDate?: string, endDate?: string, accountId?: string): Promise<Transaction[]> => {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
+    if (accountId) params.append('accountId', accountId);
     
     const response = await fetch(`${API_URL}/finance/transactions?${params.toString()}`, {
         headers: getHeaders()
@@ -447,6 +448,40 @@ export const createTransaction = async (input: Omit<Transaction, 'id' | 'company
         body: JSON.stringify(input)
     });
     return handleResponse(response);
+};
+
+// --- Financial Accounts ---
+export const getAccounts = async (): Promise<FinancialAccount[]> => {
+    const response = await fetch(`${API_URL}/finance/accounts`, {
+        headers: getHeaders()
+    });
+    return handleResponse(response);
+};
+
+export const createAccount = async (name: string, balance: number): Promise<FinancialAccount> => {
+    const response = await fetch(`${API_URL}/finance/accounts`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ name, balance })
+    });
+    return handleResponse(response);
+};
+
+export const deleteAccount = async (id: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/finance/accounts/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+    });
+    await handleResponse(response);
+};
+
+export const transferBetweenAccounts = async (data: { fromAccountId: string, toAccountId: string, amount: number, description: string, date: string }): Promise<void> => {
+    const response = await fetch(`${API_URL}/finance/transfers`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data)
+    });
+    await handleResponse(response);
 };
 
 export const updateTransaction = async (id: string, input: Omit<Transaction, 'id' | 'companyId'>): Promise<Transaction> => {

@@ -76,6 +76,17 @@ export interface Transaction {
   date: string;
   paymentMethod?: string;
   orderId?: string; // Optional, for automatic revenue from orders
+  accountId?: string;
+  accountName?: string;
+}
+
+export interface FinancialAccount {
+  id: string;
+  companyId: string;
+  name: string;
+  balance: number;
+  is_default: boolean;
+  created_at: string;
 }
 
 export interface DashboardData {

@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart, Copy, Check, FileText, ArrowRight, LayoutDashboard, Wallet } from 'lucide-react';
-import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings } from '../types';
-import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, updateOrderPayments, convertQuoteToOrder, updateEmployee } from '../services/mockData';
+import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, FinancialAccount } from '../types';
+import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, updateOrderPayments, convertQuoteToOrder, updateEmployee, getAccounts } from '../services/mockData';
 import { Dashboard } from './Dashboard';
 import { FinanceModule } from './FinanceModule';
 
@@ -115,9 +115,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethodRemaining, setPaymentMethodRemaining] = useState('Pix');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentAccountId, setPaymentAccountId] = useState('');
+  const [financeAccounts, setFinanceAccounts] = useState<FinancialAccount[]>([]);
 
   // Settings State
   const [settingsForm, setSettingsForm] = useState<AppSettings>(appSettings);
+
+  useEffect(() => {
+      if (viewingOrder) {
+          const fetchAccountsData = async () => {
+              try {
+                  const accounts = await getAccounts();
+                  setFinanceAccounts(accounts);
+                  const defaultAcc = accounts.find(a => a.is_default) || accounts[0];
+                  if (defaultAcc) setPaymentAccountId(defaultAcc.id);
+              } catch (err) {
+                  console.error("Error fetching accounts:", err);
+              }
+          };
+          fetchAccountsData();
+      }
+  }, [viewingOrder]);
 
   // --- Data Loading ---
   const refreshOrders = async () => {
@@ -543,7 +561,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   };
 
   const handleRegisterPayment = async () => {
-      if (!viewingOrder || !paymentAmount) return;
+      if (!viewingOrder || !paymentAmount || !paymentAccountId) {
+          if (!paymentAccountId) alert("Selecione uma conta para o pagamento.");
+          return;
+      }
 
       const remaining = viewingOrder.total - (viewingOrder.downPayment || 0);
       const amount = Number(paymentAmount);
@@ -556,7 +577,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       const formattedAmount = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
       const methodWithAmount = `${paymentMethodRemaining} (${formattedAmount})`;
 
-      await registerPayment(viewingOrder.id, amount, methodWithAmount, paymentDate);
+      await registerPayment(viewingOrder.id, amount, methodWithAmount, paymentDate, paymentAccountId);
       setPaymentAmount('');
       setPaymentMethodRemaining('Pix'); 
       setPaymentDate(new Date().toISOString().split('T')[0]);      
@@ -2136,6 +2157,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                              <option value="Dinheiro">Dinheiro</option>
                                              <option value="Cartão de Crédito">Cartão de Crédito</option>
                                              <option value="Cartão de Débito">Cartão de Débito</option>
+                                         </select>
+                                         <select 
+                                             className="w-full sm:w-48 border border-blue-200 rounded-lg p-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                             value={paymentAccountId}
+                                             onChange={e => setPaymentAccountId(e.target.value)}
+                                         >
+                                             <option value="">Selecionar Conta</option>
+                                             {financeAccounts.map(acc => (
+                                                 <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                             ))}
                                          </select>
                                          <div className="flex gap-2 flex-1">
                                             <input 
