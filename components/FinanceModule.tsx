@@ -435,7 +435,9 @@ export const FinanceModule: React.FC = () => {
                                                         </button>
                                                         <button 
                                                             onClick={() => handleDelete(t.id)}
-                                                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                                            disabled={!!t.orderId}
+                                                            className={`p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all ${t.orderId ? 'opacity-30 cursor-not-allowed' : ''}`}
+                                                            title={t.orderId ? "Pagamentos de pedidos devem ser excluídos no histórico do pedido" : "Excluir transação"}
                                                         >
                                                             <Trash2 size={16} />
                                                         </button>
@@ -543,92 +545,101 @@ export const FinanceModule: React.FC = () => {
                             </button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                            <div className="flex bg-gray-100 p-1 rounded-2xl">
-                                <button
-                                    type="button"
-                                    onClick={() => setForm({ ...form, type: 'revenue' })}
-                                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${form.type === 'revenue' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500'}`}
-                                >
-                                    Receita
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setForm({ ...form, type: 'expense' })}
-                                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${form.type === 'expense' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}
-                                >
-                                    Despesa
-                                </button>
-                            </div>
+                                    <div className="flex bg-gray-100 p-1 rounded-2xl">
+                                         <button
+                                             type="button"
+                                             disabled={!!editingTransaction?.orderId}
+                                             onClick={() => setForm({ ...form, type: 'revenue' })}
+                                             className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${form.type === 'revenue' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500'} ${editingTransaction?.orderId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                         >
+                                             Receita
+                                         </button>
+                                         <button
+                                             type="button"
+                                             disabled={!!editingTransaction?.orderId}
+                                             onClick={() => setForm({ ...form, type: 'expense' })}
+                                             className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${form.type === 'expense' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'} ${editingTransaction?.orderId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                         >
+                                             Despesa
+                                         </button>
+                                     </div>
 
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium text-gray-700 ml-1">Descrição</label>
-                                <input
-                                    type="text"
-                                    required
-                                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all"
-                                    placeholder="Ex: Aluguel, Venda de Camisetas..."
-                                    value={form.description}
-                                    onChange={e => setForm({ ...form, description: e.target.value })}
-                                />
-                            </div>
+                                     <div className="space-y-1">
+                                         <label className="text-sm font-medium text-gray-700 ml-1">Descrição</label>
+                                         <input
+                                             type="text"
+                                             required
+                                             disabled={!!editingTransaction?.orderId}
+                                             className={`w-full px-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all ${editingTransaction?.orderId ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                             placeholder="Ex: Aluguel, Venda de Camisetas..."
+                                             value={form.description}
+                                             onChange={e => setForm({ ...form, description: e.target.value })}
+                                         />
+                                         {editingTransaction?.orderId && (
+                                             <p className="text-[10px] text-amber-600 font-medium ml-1">Vínculo com pedido: descrição não editável.</p>
+                                         )}
+                                     </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium text-gray-700 ml-1">Valor</label>
-                                    <div className="relative">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">R$</span>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            required
-                                            className="w-full pl-10 pr-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all"
-                                            value={form.amount}
-                                            onChange={e => setForm({ ...form, amount: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium text-gray-700 ml-1">Data</label>
-                                    <input
-                                        type="date"
-                                        required
-                                        className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all"
-                                        value={form.date}
-                                        onChange={e => setForm({ ...form, date: e.target.value })}
-                                    />
-                                </div>
-                            </div>
+                                     <div className="grid grid-cols-2 gap-4">
+                                         <div className="space-y-1">
+                                             <label className="text-sm font-medium text-gray-700 ml-1">Valor</label>
+                                             <div className="relative">
+                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">R$</span>
+                                                 <input
+                                                     type="number"
+                                                     step="0.01"
+                                                     required
+                                                     disabled={!!editingTransaction?.orderId}
+                                                     className={`w-full pl-10 pr-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all ${editingTransaction?.orderId ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                                     value={form.amount}
+                                                     onChange={e => setForm({ ...form, amount: e.target.value })}
+                                                 />
+                                             </div>
+                                         </div>
+                                         <div className="space-y-1">
+                                             <label className="text-sm font-medium text-gray-700 ml-1">Data</label>
+                                             <input
+                                                 type="date"
+                                                 required
+                                                 disabled={!!editingTransaction?.orderId}
+                                                 className={`w-full px-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all ${editingTransaction?.orderId ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                                 value={form.date}
+                                                 onChange={e => setForm({ ...form, date: e.target.value })}
+                                             />
+                                         </div>
+                                     </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium text-gray-700 ml-1">Conta</label>
-                                    <select
-                                        required
-                                        className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all"
-                                        value={form.accountId}
-                                        onChange={e => setForm({ ...form, accountId: e.target.value })}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        {accounts.map(acc => (
-                                            <option key={acc.id} value={acc.id}>{acc.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium text-gray-700 ml-1">Método</label>
-                                    <select
-                                        className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all"
-                                        value={form.paymentMethod}
-                                        onChange={e => setForm({ ...form, paymentMethod: e.target.value })}
-                                    >
-                                        <option value="Pix">Pix</option>
-                                        <option value="Dinheiro">Dinheiro</option>
-                                        <option value="Cartão de Crédito">Cartão de Crédito</option>
-                                        <option value="Cartão de Débito">Cartão de Débito</option>
-                                        <option value="Transferência">Transferência</option>
-                                    </select>
-                                </div>
-                            </div>
+                                     <div className="grid grid-cols-2 gap-4">
+                                         <div className="space-y-1">
+                                             <label className="text-sm font-medium text-gray-700 ml-1">Conta</label>
+                                             <select
+                                                 required
+                                                 className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all"
+                                                 value={form.accountId}
+                                                 onChange={e => setForm({ ...form, accountId: e.target.value })}
+                                             >
+                                                 <option value="">Selecione...</option>
+                                                 {accounts.map(acc => (
+                                                     <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                                 ))}
+                                             </select>
+                                         </div>
+                                         <div className="space-y-1">
+                                             <label className="text-sm font-medium text-gray-700 ml-1">Método</label>
+                                             <select
+                                                 disabled={!!editingTransaction?.orderId}
+                                                 className={`w-full px-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all ${editingTransaction?.orderId ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                                 value={form.paymentMethod}
+                                                 onChange={e => setForm({ ...form, paymentMethod: e.target.value })}
+                                             >
+                                                 <option value="Pix">Pix</option>
+                                                 <option value="Dinheiro">Dinheiro</option>
+                                                 <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                                 <option value="Cartão de Débito">Cartão de Débito</option>
+                                                 <option value="Transferência">Transferência</option>
+                                             </select>
+                                         </div>
+                                     </div>
 
                             <button
                                 type="submit"

@@ -363,15 +363,14 @@ export const registerPayment = async (id: string, amount: number, method: string
     return getOrderById(id);
 };
 
-// NOVO: Atualiza a lista completa de pagamentos e o valor total pago
-export const updateOrderPayments = async (id: string, downPayment: number, paymentMethod: string): Promise<Order> => {
-    const response = await fetch(`${API_URL}/orders/${id}/payment-update`, {
-        method: 'PATCH',
-        headers: getHeaders(),
-        body: JSON.stringify({ downPayment, paymentMethod })
+// NOVO: Exclui um pagamento específico e sincroniza com o pedido
+export const deleteOrderPayment = async (orderId: string, transactionId: string): Promise<Order> => {
+    const response = await fetch(`${API_URL}/orders/${orderId}/payments/${transactionId}`, {
+        method: 'DELETE',
+        headers: getHeaders()
     });
     await handleResponse(response);
-    return getOrderById(id);
+    return getOrderById(orderId);
 };
 
 export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus, location?: string): Promise<Order> => {
@@ -429,11 +428,12 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus,
 };
 
 // --- Finance Functions ---
-export const getTransactions = async (startDate?: string, endDate?: string, accountId?: string): Promise<Transaction[]> => {
+export const getTransactions = async (startDate?: string, endDate?: string, accountId?: string, orderId?: string): Promise<Transaction[]> => {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
     if (accountId) params.append('accountId', accountId);
+    if (orderId) params.append('orderId', orderId);
     
     const response = await fetch(`${API_URL}/finance/transactions?${params.toString()}`, {
         headers: getHeaders()

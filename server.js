@@ -1057,29 +1057,36 @@ app.post('/api/orders/:id/payment', async (req, res) => {
         if (rows.length === 0) return res.status(404).json({ error: 'Order not found' });
 
         const current = rows[0];
-        const newDownPayment = parseFloat(current.downPayment) + amount;
+        const newDownPayment = parseFloat(current.downPayment || 0) + amount;
         const currentMethods = current.paymentMethod || '';
         
-        // Formata o método incluindo a data se fornecida
-        const formattedDate = date ? date.split('-').reverse().join('/') : '';
-        const methodWithDate = formattedDate ? `${method} - ${formattedDate}` : method;
+        const formattedDate = date ? date.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR');
+        const methodWithAmount = `${method} (R$ ${amount.toFixed(2).replace('.', ',')})`;
+        const methodWithDate = `${methodWithAmount} - ${formattedDate}`;
         
         const newPaymentMethod = currentMethods ? `${currentMethods} + ${methodWithDate}` : methodWithDate;
 
         await conn.query('UPDATE orders SET downPayment = ?, paymentMethod = ? WHERE id = ?', 
             [newDownPayment, newPaymentMethod, req.params.id]);
         
-        // Update account balance if accountId is provided
-        if (accountId) {
-            await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [amount, accountId]);
+        // Use provided account or default
+        let targetAccountId = accountId;
+        if (!targetAccountId) {
+            const [accs] = await conn.query('SELECT id FROM financial_accounts WHERE company_id = ? AND is_default = 1', [companyId]);
+            if (accs.length > 0) targetAccountId = accs[0].id;
+            else {
+                const [allAccs] = await conn.query('SELECT id FROM financial_accounts WHERE company_id = ? LIMIT 1', [companyId]);
+                if (allAccs.length > 0) targetAccountId = allAccs[0].id;
+            }
+        }
+
+        if (targetAccountId) {
+            await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [amount, targetAccountId]);
             
-            // Record transaction linked to account
             const transId = 'trans_' + Math.random().toString(36).substr(2, 9);
-            const dateStr = date ? date.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR');
-            
             await conn.query(
                 'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, paymentMethod, order_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [transId, companyId, 'revenue', `Pagamento Pedido #${req.params.id} (${method})`, amount, dateStr, method, req.params.id, accountId]
+                [transId, companyId, 'revenue', `Pagamento Pedido #${req.params.id} (${method})`, amount, formattedDate, method, req.params.id, targetAccountId]
             );
         }
         
@@ -1094,15 +1101,56 @@ app.post('/api/orders/:id/payment', async (req, res) => {
     }
 });
 
-// NOVO: Endpoint para atualizar pagamentos de forma direta (permitindo exclusão/edição)
-app.patch('/api/orders/:id/payment-update', async (req, res) => {
+// NOVO: Endpoint para excluir um pagamento específico vinculado a um pedido
+app.delete('/api/orders/:orderId/payments/:transactionId', async (req, res) => {
+    const conn = await pool.getConnection();
     try {
-        const { downPayment, paymentMethod } = req.body;
-        await pool.query('UPDATE orders SET downPayment = ?, paymentMethod = ? WHERE id = ?', 
-            [downPayment, paymentMethod, req.params.id]);
-        res.json({ message: 'Payments updated' });
+        await conn.beginTransaction();
+        const { orderId, transactionId } = req.params;
+        const companyId = getCompanyId(req);
+
+        // 1. Get transaction details
+        const [transRows] = await conn.query('SELECT * FROM finance_transactions WHERE id = ? AND company_id = ?', [transactionId, companyId]);
+        if (transRows.length === 0) return res.status(404).json({ error: 'Transaction not found' });
+        const trans = transRows[0];
+
+        // 2. Revert account balance
+        if (trans.account_id) {
+            await conn.query('UPDATE financial_accounts SET balance = balance - ? WHERE id = ?', [trans.amount, trans.account_id]);
+        }
+
+        // 3. Delete transaction
+        await conn.query('DELETE FROM finance_transactions WHERE id = ?', [transactionId]);
+
+        // 4. Update order downPayment and paymentMethod string
+        const [orderRows] = await conn.query('SELECT downPayment, paymentMethod FROM orders WHERE id = ?', [orderId]);
+        if (orderRows.length > 0) {
+            const order = orderRows[0];
+            const newDownPayment = Math.max(0, parseFloat(order.downPayment || 0) - parseFloat(trans.amount));
+            
+            // This is tricky because the string is formatted. 
+            // We'll try to remove the part that matches the amount and method.
+            let methods = order.paymentMethod ? order.paymentMethod.split(' + ') : [];
+            const amountStr = trans.amount.toFixed(2).replace('.', ',');
+            
+            // Find the index of the method that contains the amount
+            const index = methods.findIndex(m => m.includes(`R$ ${amountStr}`) && m.includes(trans.paymentMethod));
+            if (index !== -1) {
+                methods.splice(index, 1);
+            }
+            const newPaymentMethod = methods.join(' + ');
+
+            await conn.query('UPDATE orders SET downPayment = ?, paymentMethod = ? WHERE id = ?', [newDownPayment, newPaymentMethod, orderId]);
+        }
+
+        await conn.commit();
+        res.json({ message: 'Payment removed and balance updated' });
     } catch (err) {
+        await conn.rollback();
+        console.error(err);
         res.status(500).json({ error: err.message });
+    } finally {
+        conn.release();
     }
 });
 
@@ -1112,11 +1160,11 @@ app.get('/api/finance/transactions', async (req, res) => {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
-        const { startDate, endDate, accountId } = req.query;
+        const { startDate, endDate, accountId, orderId } = req.query;
 
-        // Get manual transactions
+        // Get transactions
         let manualQuery = `
-            SELECT t.*, a.name as accountName 
+            SELECT t.*, a.name as accountName, t.account_id as accountId
             FROM finance_transactions t 
             LEFT JOIN financial_accounts a ON t.account_id = a.id 
             WHERE t.company_id = ?
@@ -1126,6 +1174,11 @@ app.get('/api/finance/transactions', async (req, res) => {
         if (accountId && accountId !== 'all') {
             manualQuery += " AND t.account_id = ?";
             manualParams.push(accountId);
+        }
+
+        if (orderId) {
+            manualQuery += " AND t.order_id = ?";
+            manualParams.push(orderId);
         }
 
         if (startDate && endDate) {
@@ -1247,26 +1300,48 @@ app.put('/api/finance/transactions/:id', async (req, res) => {
         const { type, description, amount, date, paymentMethod, accountId } = req.body;
         const transactionId = req.params.id;
 
-        // Get old transaction to adjust balance
+        // Get old transaction
         const [oldRows] = await conn.query('SELECT * FROM finance_transactions WHERE id = ? AND company_id = ?', [transactionId, companyId]);
-        if (oldRows.length > 0) {
-            const old = oldRows[0];
+        if (oldRows.length === 0) {
+            await conn.rollback();
+            return res.status(404).json({ error: 'Transaction not found' });
+        }
+        
+        const old = oldRows[0];
+
+        // RESTRICTION: If linked to an order, only accountId can be changed
+        if (old.order_id) {
+            // Only update account_id
+            // Revert old balance if account changed
+            if (old.account_id !== accountId) {
+                if (old.account_id) {
+                    const oldBalanceChange = old.type === 'revenue' ? -old.amount : old.amount;
+                    await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [oldBalanceChange, old.account_id]);
+                }
+                if (accountId) {
+                    const newBalanceChange = old.type === 'revenue' ? old.amount : -old.amount;
+                    await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [newBalanceChange, accountId]);
+                }
+                await conn.query('UPDATE finance_transactions SET account_id = ? WHERE id = ?', [accountId || null, transactionId]);
+            }
+        } else {
+            // Manual transaction: full edit allowed
             // Revert old balance
             if (old.account_id) {
                 const oldBalanceChange = old.type === 'revenue' ? -old.amount : old.amount;
                 await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [oldBalanceChange, old.account_id]);
             }
-        }
 
-        await conn.query(
-            'UPDATE finance_transactions SET type = ?, description = ?, amount = ?, date = ?, paymentMethod = ?, account_id = ? WHERE id = ? AND company_id = ?',
-            [type, description, amount, date, paymentMethod, accountId || null, transactionId, companyId]
-        );
+            await conn.query(
+                'UPDATE finance_transactions SET type = ?, description = ?, amount = ?, date = ?, paymentMethod = ?, account_id = ? WHERE id = ? AND company_id = ?',
+                [type, description, amount, date, paymentMethod, accountId || null, transactionId, companyId]
+            );
 
-        // Apply new balance
-        if (accountId) {
-            const newBalanceChange = type === 'revenue' ? amount : -amount;
-            await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [newBalanceChange, accountId]);
+            // Apply new balance
+            if (accountId) {
+                const newBalanceChange = type === 'revenue' ? amount : -amount;
+                await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [newBalanceChange, accountId]);
+            }
         }
 
         await conn.commit();
@@ -1292,6 +1367,13 @@ app.delete('/api/finance/transactions/:id', async (req, res) => {
         const [rows] = await conn.query('SELECT * FROM finance_transactions WHERE id = ? AND company_id = ?', [transactionId, companyId]);
         if (rows.length > 0) {
             const trans = rows[0];
+            
+            // RESTRICTION: Cannot delete order-linked transactions
+            if (trans.order_id) {
+                await conn.rollback();
+                return res.status(400).json({ error: 'Não é permitido excluir pagamentos vinculados a pedidos por aqui. Use o histórico do pedido.' });
+            }
+
             if (trans.account_id) {
                 const balanceChange = trans.type === 'revenue' ? -trans.amount : trans.amount;
                 await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [balanceChange, trans.account_id]);
@@ -1432,25 +1514,17 @@ app.get('/api/dashboard', async (req, res) => {
         const [receivableRows] = await pool.query('SELECT SUM(total - downPayment) as total FROM orders WHERE company_id = ? AND currentStatus != "CANCELADO" AND currentStatus != "ORCAMENTO"', [companyId]);
         const totalReceivable = parseFloat(receivableRows[0].total) || 0;
 
-        // 4. Payment methods distribution (from orders) - Current Month
+        // 4. Payment methods distribution (from transactions) - Current Month
         const [paymentRows] = await pool.query(
-            'SELECT paymentMethod, downPayment FROM orders WHERE company_id = ? AND downPayment > 0 AND orderDate LIKE ?', 
-            [companyId, `%/${monthStr}`]
+            'SELECT paymentMethod, amount FROM finance_transactions WHERE company_id = ? AND type = "revenue" AND (date LIKE ? OR date LIKE ?)', 
+            [companyId, `%/${monthStr}`, `%${monthStr}`]
         );
         const methodMap = {};
         paymentRows.forEach(row => {
-            // Basic parsing: "Pix (R$ 50,00)" -> "Pix"
-            const parts = row.paymentMethod.split('+');
-            parts.forEach(p => {
-                const methodName = p.split('(')[0].trim();
-                // Try to extract amount from "(R$ 50,00)"
-                const amountMatch = p.match(/R\$\s?([\d.,]+)/);
-                let amount = row.downPayment; // fallback
-                if (amountMatch) {
-                    amount = parseFloat(amountMatch[1].replace(/\./g, '').replace(',', '.'));
-                }
-                methodMap[methodName] = (methodMap[methodName] || 0) + amount;
-            });
+            let methodName = row.paymentMethod || 'Outros';
+            // Clean up method name if it has date or extra info
+            methodName = methodName.split('(')[0].split('-')[0].trim();
+            methodMap[methodName] = (methodMap[methodName] || 0) + parseFloat(row.amount);
         });
 
         const paymentMethods = Object.entries(methodMap).map(([name, value]) => ({ name, value }));
