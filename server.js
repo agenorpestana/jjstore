@@ -1322,8 +1322,9 @@ app.put('/api/finance/transactions/:id', async (req, res) => {
                     const newBalanceChange = old.type === 'revenue' ? old.amount : -old.amount;
                     await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [newBalanceChange, accountId]);
                 }
-                await conn.query('UPDATE finance_transactions SET account_id = ? WHERE id = ?', [accountId || null, transactionId]);
             }
+            // Always update the account_id in the transaction record if it changed
+            await conn.query('UPDATE finance_transactions SET account_id = ? WHERE id = ?', [accountId || null, transactionId]);
         } else {
             // Manual transaction: full edit allowed
             // Revert old balance
@@ -1345,7 +1346,9 @@ app.put('/api/finance/transactions/:id', async (req, res) => {
         }
 
         await conn.commit();
-        res.json({ id: transactionId, type, description, amount, date, paymentMethod, accountId });
+        // Return the actual state from DB for consistency
+        const [updatedRows] = await conn.query('SELECT * FROM finance_transactions WHERE id = ?', [transactionId]);
+        res.json(updatedRows[0]);
     } catch (err) {
         await conn.rollback();
         res.status(500).json({ error: err.message });

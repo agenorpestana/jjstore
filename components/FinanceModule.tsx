@@ -127,8 +127,8 @@ export const FinanceModule: React.FC = () => {
             
             setShowModal(false);
             loadData();
-        } catch (err) {
-            alert("Erro ao salvar transação");
+        } catch (err: any) {
+            alert("Erro ao salvar transação: " + (err.message || "Erro desconhecido"));
         }
     };
 
