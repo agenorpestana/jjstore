@@ -2183,8 +2183,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                                  onChange={e => setPaymentAccountId(e.target.value)}
                                              >
                                                  <option value="">Selecionar Conta Bancária</option>
-                                                 {financeAccounts.map(acc => (
-                                                     <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                                 {financeAccounts.filter(acc => acc.active || acc.id === paymentAccountId).map(acc => (
+                                                     <option key={acc.id} value={acc.id}>{acc.name} {!acc.active && '(Inativa)'}</option>
                                                  ))}
                                              </select>
                                          </div>

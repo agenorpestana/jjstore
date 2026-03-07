@@ -86,6 +86,7 @@ export interface FinancialAccount {
   name: string;
   balance: number;
   is_default: boolean;
+  active: boolean;
   created_at: string;
 }
 

@@ -475,6 +475,15 @@ export const deleteAccount = async (id: string): Promise<void> => {
     await handleResponse(response);
 };
 
+export const updateAccount = async (id: string, data: Partial<FinancialAccount>): Promise<void> => {
+    const response = await fetch(`${API_URL}/finance/accounts/${id}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify(data)
+    });
+    await handleResponse(response);
+};
+
 export const transferBetweenAccounts = async (data: { fromAccountId: string, toAccountId: string, amount: number, description: string, date: string }): Promise<void> => {
     const response = await fetch(`${API_URL}/finance/transfers`, {
         method: 'POST',

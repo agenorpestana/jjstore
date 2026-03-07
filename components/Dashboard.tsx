@@ -42,6 +42,7 @@ export const Dashboard: React.FC = () => {
     const statusMap: Record<string, { label: string, color: string, icon: any }> = {
         [OrderStatus.PEDIDO_FEITO]: { label: 'Feito', color: 'bg-blue-100 text-blue-700', icon: Package },
         [OrderStatus.EM_PRODUCAO]: { label: 'Em Produção', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
+        [OrderStatus.AGUARDANDO_RETIRADA]: { label: 'Aguardando Retirada', color: 'bg-purple-100 text-purple-700', icon: Package },
         [OrderStatus.CONCLUIDO]: { label: 'Concluído', color: 'bg-green-100 text-green-700', icon: CheckCircle },
         [OrderStatus.CANCELADO]: { label: 'Cancelado', color: 'bg-red-100 text-red-700', icon: TrendingUp },
         [OrderStatus.ORCAMENTO]: { label: 'Orçamento', color: 'bg-gray-100 text-gray-700', icon: TrendingUp },
@@ -50,7 +51,7 @@ export const Dashboard: React.FC = () => {
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* Production Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <div className="flex items-center justify-between mb-4">
                         <div className="p-2 bg-blue-50 rounded-lg">
@@ -75,12 +76,22 @@ export const Dashboard: React.FC = () => {
 
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <div className="flex items-center justify-between mb-4">
-                        <div className="p-2 bg-purple-50 rounded-lg">
-                            <Clock className="w-6 h-6 text-purple-600" />
+                        <div className="p-2 bg-yellow-50 rounded-lg">
+                            <Clock className="w-6 h-6 text-yellow-600" />
                         </div>
                     </div>
                     <h3 className="text-gray-500 text-sm font-medium">Em Produção</h3>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{data.statusCounts[OrderStatus.EM_PRODUCAO] || 0}</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-2 bg-purple-50 rounded-lg">
+                            <Package className="w-6 h-6 text-purple-600" />
+                        </div>
+                    </div>
+                    <h3 className="text-gray-500 text-sm font-medium">Aguardando Retirada</h3>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{data.statusCounts[OrderStatus.AGUARDANDO_RETIRADA] || 0}</p>
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -136,7 +147,7 @@ export const Dashboard: React.FC = () => {
                     {/* Status Summary List */}
                     <div className="md:col-span-3 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                         <h3 className="text-gray-900 font-semibold mb-4">Resumo por Status</h3>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                             {Object.entries(statusMap).map(([status, config]) => (
                                 <div key={status} className={`p-4 rounded-xl ${config.color} flex flex-col items-center justify-center text-center`}>
                                     <config.icon className="w-5 h-5 mb-2" />

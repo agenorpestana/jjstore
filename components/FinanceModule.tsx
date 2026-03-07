@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Calendar, FileText, Search, Filter, Edit2, X, Wallet, ArrowRightLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Transaction, FinancialAccount } from '../types';
-import { getTransactions, createTransaction, deleteTransaction, updateTransaction, getAccounts, createAccount, deleteAccount, transferBetweenAccounts } from '../services/mockData';
+import { getTransactions, createTransaction, deleteTransaction, updateTransaction, getAccounts, createAccount, deleteAccount, updateAccount, transferBetweenAccounts } from '../services/mockData';
 
 export const FinanceModule: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'transactions' | 'accounts'>('transactions');
@@ -11,6 +11,7 @@ export const FinanceModule: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [showAccountModal, setShowAccountModal] = useState(false);
+    const [editingAccount, setEditingAccount] = useState<FinancialAccount | null>(null);
     const [showTransferModal, setShowTransferModal] = useState(false);
     const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -41,7 +42,8 @@ export const FinanceModule: React.FC = () => {
 
     const [accountForm, setAccountForm] = useState({
         name: '',
-        balance: ''
+        balance: '',
+        active: true
     });
 
     const [transferForm, setTransferForm] = useState({
@@ -132,16 +134,43 @@ export const FinanceModule: React.FC = () => {
         }
     };
 
+    const handleOpenAccountModal = (account?: FinancialAccount) => {
+        if (account) {
+            setEditingAccount(account);
+            setAccountForm({
+                name: account.name,
+                balance: account.balance.toString(),
+                active: account.active
+            });
+        } else {
+            setEditingAccount(null);
+            setAccountForm({
+                name: '',
+                balance: '',
+                active: true
+            });
+        }
+        setShowAccountModal(true);
+    };
+
     const handleCreateAccount = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!accountForm.name) return;
         try {
-            await createAccount(accountForm.name, Number(accountForm.balance) || 0);
+            if (editingAccount) {
+                await updateAccount(editingAccount.id, {
+                    name: accountForm.name,
+                    balance: Number(accountForm.balance) || 0,
+                    active: accountForm.active
+                });
+            } else {
+                await createAccount(accountForm.name, Number(accountForm.balance) || 0);
+            }
             setShowAccountModal(false);
-            setAccountForm({ name: '', balance: '' });
+            setAccountForm({ name: '', balance: '', active: true });
             loadData();
-        } catch (err) {
-            alert("Erro ao criar conta");
+        } catch (err: any) {
+            alert("Erro ao salvar conta: " + (err.message || "Erro desconhecido"));
         }
     };
 
@@ -186,8 +215,8 @@ export const FinanceModule: React.FC = () => {
         try {
             await deleteAccount(id);
             loadData();
-        } catch (err) {
-            alert("Erro ao excluir conta");
+        } catch (err: any) {
+            alert(err.message || "Erro ao excluir conta. Se ela possui movimentações, você deve apenas inativá-la.");
         }
     };
 
@@ -275,7 +304,7 @@ export const FinanceModule: React.FC = () => {
                             >
                                 <option value="all">Todas as Contas</option>
                                 {accounts.map(acc => (
-                                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                    <option key={acc.id} value={acc.id}>{acc.name} {!acc.active && '(Inativa)'}</option>
                                 ))}
                             </select>
                         </div>
@@ -491,7 +520,7 @@ export const FinanceModule: React.FC = () => {
                     <div className="flex justify-between items-center">
                         <h2 className="text-xl font-bold text-gray-900">Gerenciar Contas</h2>
                         <button 
-                            onClick={() => setShowAccountModal(true)}
+                            onClick={() => handleOpenAccountModal()}
                             className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-2xl font-medium hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
                         >
                             <Plus size={20} />
@@ -501,14 +530,19 @@ export const FinanceModule: React.FC = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {accounts.map(acc => (
-                            <div key={acc.id} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 relative group">
+                            <div key={acc.id} className={`bg-white p-6 rounded-3xl shadow-sm border border-gray-100 relative group transition-all ${!acc.active ? 'opacity-60 grayscale-[0.5]' : ''}`}>
                                 <div className="flex items-center justify-between mb-4">
-                                    <div className="p-3 bg-blue-50 rounded-2xl">
-                                        <Wallet className="w-6 h-6 text-blue-600" />
+                                    <div className={`p-3 rounded-2xl ${acc.active ? 'bg-blue-50' : 'bg-gray-100'}`}>
+                                        <Wallet className={`w-6 h-6 ${acc.active ? 'text-blue-600' : 'text-gray-400'}`} />
                                     </div>
-                                    {acc.is_default && (
-                                        <span className="text-[10px] uppercase tracking-wider font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">Padrão</span>
-                                    )}
+                                    <div className="flex items-center gap-2">
+                                        {!acc.active && (
+                                            <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded-full">Inativa</span>
+                                        )}
+                                        {acc.is_default && (
+                                            <span className="text-[10px] uppercase tracking-wider font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">Padrão</span>
+                                        )}
+                                    </div>
                                 </div>
                                 <h3 className="text-lg font-bold text-gray-900">{acc.name}</h3>
                                 <div className="mt-4">
@@ -518,14 +552,24 @@ export const FinanceModule: React.FC = () => {
                                     </p>
                                 </div>
                                 
-                                {!acc.is_default && (
+                                <div className="absolute top-6 right-6 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                     <button 
-                                        onClick={() => handleDeleteAccount(acc.id)}
-                                        className="absolute top-6 right-6 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl opacity-0 group-hover:opacity-100 transition-all"
+                                        onClick={() => handleOpenAccountModal(acc)}
+                                        className="p-2 text-gray-400 hover:text-primary hover:bg-blue-50 rounded-xl transition-all"
+                                        title="Editar conta"
                                     >
-                                        <Trash2 size={16} />
+                                        <Edit2 size={16} />
                                     </button>
-                                )}
+                                    {!acc.is_default && (
+                                        <button 
+                                            onClick={() => handleDeleteAccount(acc.id)}
+                                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                            title="Excluir conta"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -619,8 +663,8 @@ export const FinanceModule: React.FC = () => {
                                                  onChange={e => setForm({ ...form, accountId: e.target.value })}
                                              >
                                                  <option value="">Selecione...</option>
-                                                 {accounts.map(acc => (
-                                                     <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                                 {accounts.filter(acc => acc.active || acc.id === form.accountId).map(acc => (
+                                                     <option key={acc.id} value={acc.id}>{acc.name} {!acc.active && '(Inativa)'}</option>
                                                  ))}
                                              </select>
                                          </div>
@@ -657,7 +701,9 @@ export const FinanceModule: React.FC = () => {
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                            <h3 className="text-xl font-bold text-gray-900">Nova Conta Bancária</h3>
+                            <h3 className="text-xl font-bold text-gray-900">
+                                {editingAccount ? 'Editar Conta Bancária' : 'Nova Conta Bancária'}
+                            </h3>
                             <button onClick={() => setShowAccountModal(false)} className="p-2 hover:bg-gray-50 rounded-xl transition-all">
                                 <X size={20} className="text-gray-400" />
                             </button>
@@ -675,7 +721,7 @@ export const FinanceModule: React.FC = () => {
                                 />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-sm font-medium text-gray-700 ml-1">Saldo Inicial (Opcional)</label>
+                                <label className="text-sm font-medium text-gray-700 ml-1">Saldo {editingAccount ? 'Atual' : 'Inicial'}</label>
                                 <div className="relative">
                                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">R$</span>
                                     <input
@@ -687,11 +733,30 @@ export const FinanceModule: React.FC = () => {
                                     />
                                 </div>
                             </div>
+
+                            {editingAccount && !editingAccount.is_default && (
+                                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-bold text-gray-900">Status da Conta</span>
+                                        <span className="text-xs text-gray-500">Contas inativas não aparecem em novos lançamentos</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAccountForm({ ...accountForm, active: !accountForm.active })}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${accountForm.active ? 'bg-green-500' : 'bg-gray-300'}`}
+                                    >
+                                        <span
+                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${accountForm.active ? 'translate-x-6' : 'translate-x-1'}`}
+                                        />
+                                    </button>
+                                </div>
+                            )}
+
                             <button
                                 type="submit"
                                 className="w-full bg-primary text-white py-4 rounded-2xl font-bold mt-4 hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
                             >
-                                Criar Conta
+                                {editingAccount ? 'Salvar Alterações' : 'Criar Conta'}
                             </button>
                         </form>
                     </div>
@@ -719,8 +784,8 @@ export const FinanceModule: React.FC = () => {
                                         onChange={e => setTransferForm({ ...transferForm, fromAccountId: e.target.value })}
                                     >
                                         <option value="">Selecione...</option>
-                                        {accounts.map(acc => (
-                                            <option key={acc.id} value={acc.id}>{acc.name} ({formatCurrency(acc.balance)})</option>
+                                        {accounts.filter(acc => acc.active || acc.id === transferForm.fromAccountId).map(acc => (
+                                            <option key={acc.id} value={acc.id}>{acc.name} ({formatCurrency(acc.balance)}) {!acc.active && '(Inativa)'}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -733,8 +798,8 @@ export const FinanceModule: React.FC = () => {
                                         onChange={e => setTransferForm({ ...transferForm, toAccountId: e.target.value })}
                                     >
                                         <option value="">Selecione...</option>
-                                        {accounts.map(acc => (
-                                            <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                        {accounts.filter(acc => acc.active || acc.id === transferForm.toAccountId).map(acc => (
+                                            <option key={acc.id} value={acc.id}>{acc.name} {!acc.active && '(Inativa)'}</option>
                                         ))}
                                     </select>
                                 </div>

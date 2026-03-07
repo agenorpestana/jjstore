@@ -151,6 +151,7 @@ async function initDatabase() {
         name VARCHAR(100),
         balance DECIMAL(10, 2) DEFAULT 0,
         is_default BOOLEAN DEFAULT FALSE,
+        active BOOLEAN DEFAULT TRUE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
       );
@@ -180,7 +181,8 @@ async function initDatabase() {
        "ALTER TABLE plans ADD COLUMN visible BOOLEAN DEFAULT TRUE",
        "ALTER TABLE finance_transactions ADD COLUMN paymentMethod VARCHAR(255)",
        "ALTER TABLE orders MODIFY COLUMN paymentMethod TEXT",
-       "ALTER TABLE finance_transactions MODIFY COLUMN paymentMethod VARCHAR(255)"
+       "ALTER TABLE finance_transactions MODIFY COLUMN paymentMethod VARCHAR(255)",
+       "ALTER TABLE financial_accounts ADD COLUMN active BOOLEAN DEFAULT TRUE"
     ];
 
     for (const query of migrationQueries) {
@@ -1476,7 +1478,7 @@ app.get('/api/finance/accounts', async (req, res) => {
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
         const [rows] = await pool.query('SELECT * FROM financial_accounts WHERE company_id = ?', [companyId]);
-        res.json(rows.map(r => ({ ...r, balance: parseFloat(r.balance), isDefault: !!r.is_default })));
+        res.json(rows.map(r => ({ ...r, balance: parseFloat(r.balance), isDefault: !!r.is_default, active: !!r.active })));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1491,11 +1493,47 @@ app.post('/api/finance/accounts', async (req, res) => {
         const id = `acc_${Date.now()}`;
 
         await pool.query(
-            'INSERT INTO financial_accounts (id, company_id, name, balance, is_default) VALUES (?, ?, ?, ?, ?)',
-            [id, companyId, name, balance || 0, false]
+            'INSERT INTO financial_accounts (id, company_id, name, balance, is_default, active) VALUES (?, ?, ?, ?, ?, ?)',
+            [id, companyId, name, balance || 0, false, true]
         );
 
-        res.status(201).json({ id, companyId, name, balance: balance || 0, isDefault: false });
+        res.status(201).json({ id, companyId, name, balance: balance || 0, isDefault: false, active: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.patch('/api/finance/accounts/:id', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        const { name, balance, active } = req.body;
+        
+        let query = 'UPDATE financial_accounts SET ';
+        const params = [];
+        const updates = [];
+        
+        if (name !== undefined) {
+            updates.push('name = ?');
+            params.push(name);
+        }
+        if (balance !== undefined) {
+            updates.push('balance = ?');
+            params.push(balance);
+        }
+        if (active !== undefined) {
+            updates.push('active = ?');
+            params.push(active);
+        }
+        
+        if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
+        
+        query += updates.join(', ') + ' WHERE id = ? AND company_id = ?';
+        params.push(req.params.id, companyId);
+        
+        await pool.query(query, params);
+        res.json({ message: 'Account updated' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1505,6 +1543,13 @@ app.delete('/api/finance/accounts/:id', async (req, res) => {
     try {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        // Check if account has transactions
+        const [transactions] = await pool.query('SELECT id FROM finance_transactions WHERE account_id = ? AND company_id = ? LIMIT 1', [req.params.id, companyId]);
+        
+        if (transactions.length > 0) {
+            return res.status(400).json({ error: 'Esta conta possui movimentações e não pode ser excluída. Você pode apenas inativá-la.' });
+        }
 
         const [rows] = await pool.query('SELECT is_default FROM financial_accounts WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
         if (rows.length === 0) return res.status(404).json({ error: 'Account not found' });
@@ -1570,9 +1615,16 @@ app.get('/api/dashboard', async (req, res) => {
 
         // Status counts
         const [statusRows] = await pool.query('SELECT currentStatus, COUNT(*) as count FROM orders WHERE company_id = ? GROUP BY currentStatus', [companyId]);
-        const statusCounts = {};
+        const statusCounts = {
+            'ORCAMENTO': 0,
+            'PEDIDO_FEITO': 0,
+            'EM_PRODUCAO': 0,
+            'AGUARDANDO_RETIRADA': 0,
+            'CONCLUIDO': 0,
+            'CANCELADO': 0
+        };
         statusRows.forEach(row => {
-            statusCounts[row.currentStatus] = row.count;
+            if (row.currentStatus) statusCounts[row.currentStatus] = row.count;
         });
 
         // Finance stats
