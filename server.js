@@ -84,7 +84,7 @@ async function initDatabase() {
         estimatedDelivery VARCHAR(20),
         total DECIMAL(10, 2),
         downPayment DECIMAL(10, 2),
-        paymentMethod VARCHAR(100),
+        paymentMethod TEXT,
         shippingAddress TEXT,
         pressingDate VARCHAR(20),
         printingDate VARCHAR(20),
@@ -139,7 +139,7 @@ async function initDatabase() {
         description TEXT,
         amount DECIMAL(10, 2),
         date VARCHAR(20),
-        paymentMethod VARCHAR(50),
+        paymentMethod VARCHAR(255),
         order_id VARCHAR(50),
         account_id VARCHAR(50),
         FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
@@ -178,7 +178,9 @@ async function initDatabase() {
        "ALTER TABLE companies ADD COLUMN last_payment_date DATETIME",
        "ALTER TABLE orders ADD COLUMN currentStatus VARCHAR(50)",
        "ALTER TABLE plans ADD COLUMN visible BOOLEAN DEFAULT TRUE",
-       "ALTER TABLE finance_transactions ADD COLUMN paymentMethod VARCHAR(50)"
+       "ALTER TABLE finance_transactions ADD COLUMN paymentMethod VARCHAR(255)",
+       "ALTER TABLE orders MODIFY COLUMN paymentMethod TEXT",
+       "ALTER TABLE finance_transactions MODIFY COLUMN paymentMethod VARCHAR(255)"
     ];
 
     for (const query of migrationQueries) {
