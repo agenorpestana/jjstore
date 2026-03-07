@@ -46,6 +46,7 @@ export interface Order {
   // Campos específicos de Orçamento
   quoteValidity?: string;
   notes?: string;
+  downPaymentAccountId?: string;
 }
 
 export interface NewOrderInput {
@@ -56,6 +57,7 @@ export interface NewOrderInput {
   shippingAddress: string;
   paymentMethod: string;
   downPayment: number;
+  downPaymentAccountId?: string;
   photos: string[];
   pressingDate?: string;
   printingDate?: string;
@@ -85,6 +87,8 @@ export interface FinancialAccount {
   companyId: string;
   name: string;
   balance: number;
+  initialBalance?: number;
+  initialBalanceDate?: string;
   is_default: boolean;
   active: boolean;
   created_at: string;

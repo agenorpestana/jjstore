@@ -67,6 +67,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
   const [activeTab, setActiveTab] = useState<Tab>(isAdmin ? 'dashboard' : 'orders');
   const [orders, setOrders] = useState<Order[]>([]);
+  const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -150,6 +151,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     try {
         const data = await getAllOrders();
         setOrders(data);
+        const accs = await getAccounts();
+        setAccounts(accs);
     } catch (err) {
         console.error("Erro ao carregar pedidos:", err);
     } finally {
@@ -254,6 +257,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     estimatedDelivery: '',
     paymentMethod: 'Pix',
     downPayment: 0,
+    downPaymentAccountId: '',
     photos: [],
     items: [],
     pressingDate: '',
@@ -273,7 +277,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       setOrderForm({
         customerName: '', customerPhone: '', shippingAddress: '', 
         orderDate: new Date().toISOString().split('T')[0], estimatedDelivery: '',
-        paymentMethod: 'Pix', downPayment: 0, photos: [], items: [],
+        paymentMethod: 'Pix', downPayment: 0, downPaymentAccountId: '', photos: [], items: [],
         pressingDate: '', printingDate: '', seamstress: '',
         isQuote: activeTab === 'quotes', // Default to true if in quotes tab
         quoteValidity: '', notes: ''
@@ -309,6 +313,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           estimatedDelivery: parseDateToInput(order.estimatedDelivery),
           paymentMethod: order.paymentMethod, // Assuming this is string
           downPayment: order.downPayment,
+          downPaymentAccountId: order.downPaymentAccountId || '',
           photos: order.photos || [],
           pressingDate: order.pressingDate || '',
           printingDate: order.printingDate || '',
@@ -332,6 +337,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           estimatedDelivery: '', // Limpa previsão
           paymentMethod: 'Pix', // Reset financeiro
           downPayment: 0, // Reset financeiro
+          downPaymentAccountId: '',
           photos: order.photos || [],
           pressingDate: '',
           printingDate: '',
@@ -449,6 +455,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     const total = orderForm.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
     if (orderForm.downPayment > total) {
         alert("O valor de entrada não pode ser maior que o valor total dos produtos.");
+        return;
+    }
+    
+    if (orderForm.downPayment > 0 && !orderForm.downPaymentAccountId) {
+        alert("Por favor, selecione a conta para o recebimento da entrada.");
         return;
     }
 
@@ -1758,6 +1769,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         onChange={e => setOrderForm({...orderForm, downPayment: Number(e.target.value)})}
                         />
                     </div>
+                    {orderForm.downPayment > 0 && (
+                        <div className="col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Conta para Recebimento da Entrada</label>
+                            <select 
+                                required
+                                className="w-full border border-gray-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-primary focus:outline-none"
+                                value={orderForm.downPaymentAccountId}
+                                onChange={e => setOrderForm({...orderForm, downPaymentAccountId: e.target.value})}
+                            >
+                                <option value="">Selecione uma conta...</option>
+                                {accounts.filter(acc => acc.active || acc.id === orderForm.downPaymentAccountId).map(acc => (
+                                    <option key={acc.id} value={acc.id}>{acc.name} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(acc.balance)})</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                   </div>
               </div>
 

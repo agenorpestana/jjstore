@@ -246,6 +246,7 @@ export const createOrder = async (input: NewOrderInput): Promise<Order> => {
     shippingAddress: input.shippingAddress,
     paymentMethod: input.paymentMethod,
     downPayment: input.downPayment,
+    downPaymentAccountId: input.downPaymentAccountId,
     // Se for orçamento, usa status ORCAMENTO, senão PEDIDO_FEITO
     currentStatus: input.isQuote ? OrderStatus.ORCAMENTO : OrderStatus.PEDIDO_FEITO,
     total,
@@ -458,11 +459,11 @@ export const getAccounts = async (): Promise<FinancialAccount[]> => {
     return handleResponse(response);
 };
 
-export const createAccount = async (name: string, balance: number): Promise<FinancialAccount> => {
+export const createAccount = async (data: { name: string, initialBalance: number, initialBalanceDate: string }): Promise<FinancialAccount> => {
     const response = await fetch(`${API_URL}/finance/accounts`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ name, balance })
+        body: JSON.stringify(data)
     });
     return handleResponse(response);
 };

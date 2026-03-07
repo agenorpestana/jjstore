@@ -43,6 +43,8 @@ export const FinanceModule: React.FC = () => {
     const [accountForm, setAccountForm] = useState({
         name: '',
         balance: '',
+        initialBalance: '',
+        initialBalanceDate: new Date().toISOString().split('T')[0],
         active: true
     });
 
@@ -140,6 +142,8 @@ export const FinanceModule: React.FC = () => {
             setAccountForm({
                 name: account.name,
                 balance: account.balance.toString(),
+                initialBalance: account.initialBalance?.toString() || account.balance.toString(),
+                initialBalanceDate: account.initialBalanceDate || new Date().toISOString().split('T')[0],
                 active: account.active
             });
         } else {
@@ -147,6 +151,8 @@ export const FinanceModule: React.FC = () => {
             setAccountForm({
                 name: '',
                 balance: '',
+                initialBalance: '',
+                initialBalanceDate: new Date().toISOString().split('T')[0],
                 active: true
             });
         }
@@ -169,14 +175,19 @@ export const FinanceModule: React.FC = () => {
             if (editingAccount) {
                 await updateAccount(editingAccount.id, {
                     name: accountForm.name,
-                    balance: Number(accountForm.balance) || 0,
+                    initialBalance: Number(accountForm.initialBalance) || 0,
+                    initialBalanceDate: accountForm.initialBalanceDate,
                     active: accountForm.active
                 });
             } else {
-                await createAccount(accountForm.name, Number(accountForm.balance) || 0);
+                await createAccount({
+                    name: accountForm.name,
+                    initialBalance: Number(accountForm.initialBalance) || 0,
+                    initialBalanceDate: accountForm.initialBalanceDate
+                });
             }
             setShowAccountModal(false);
-            setAccountForm({ name: '', balance: '', active: true });
+            setAccountForm({ name: '', balance: '', initialBalance: '', initialBalanceDate: new Date().toISOString().split('T')[0], active: true });
             loadData();
         } catch (err: any) {
             alert("Erro ao salvar conta: " + (err.message || "Erro desconhecido"));
@@ -738,19 +749,43 @@ export const FinanceModule: React.FC = () => {
                                     onChange={e => setAccountForm({ ...accountForm, name: e.target.value })}
                                 />
                             </div>
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium text-gray-700 ml-1">Saldo {editingAccount ? 'Atual' : 'Inicial'}</label>
-                                <div className="relative">
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">R$</span>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium text-gray-700 ml-1">Saldo Inicial</label>
+                                    <div className="relative">
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">R$</span>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            required
+                                            className="w-full pl-10 pr-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all"
+                                            value={accountForm.initialBalance}
+                                            onChange={e => setAccountForm({ ...accountForm, initialBalance: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium text-gray-700 ml-1">Data do Saldo</label>
                                     <input
-                                        type="number"
-                                        step="0.01"
-                                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all"
-                                        value={accountForm.balance}
-                                        onChange={e => setAccountForm({ ...accountForm, balance: e.target.value })}
+                                        type="date"
+                                        required
+                                        className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+                                        value={accountForm.initialBalanceDate}
+                                        onChange={e => setAccountForm({ ...accountForm, initialBalanceDate: e.target.value })}
                                     />
                                 </div>
                             </div>
+
+                            {editingAccount && (
+                                <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl">
+                                    <span className="text-xs text-blue-600 uppercase tracking-wider font-bold">Saldo Atual Calculado</span>
+                                    <p className="text-xl font-bold text-blue-900">{formatCurrency(Number(accountForm.balance))}</p>
+                                    <p className="text-[10px] text-blue-500 mt-1">
+                                        O saldo atual é o saldo inicial mais todas as movimentações registradas.
+                                    </p>
+                                </div>
+                            )}
 
                             {editingAccount && !editingAccount.is_default && (
                                 <div className="p-4 bg-gray-50 rounded-2xl space-y-3">

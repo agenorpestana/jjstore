@@ -182,7 +182,9 @@ async function initDatabase() {
        "ALTER TABLE finance_transactions ADD COLUMN paymentMethod VARCHAR(255)",
        "ALTER TABLE orders MODIFY COLUMN paymentMethod TEXT",
        "ALTER TABLE finance_transactions MODIFY COLUMN paymentMethod VARCHAR(255)",
-       "ALTER TABLE financial_accounts ADD COLUMN active BOOLEAN DEFAULT TRUE"
+       "ALTER TABLE financial_accounts ADD COLUMN active BOOLEAN DEFAULT TRUE",
+       "ALTER TABLE financial_accounts ADD COLUMN initial_balance DECIMAL(10, 2) DEFAULT 0",
+       "ALTER TABLE financial_accounts ADD COLUMN initial_balance_date VARCHAR(20)"
     ];
 
     for (const query of migrationQueries) {
@@ -250,82 +252,6 @@ async function ensureDefaultAccount(companyId) {
     }
 }
 
-// --- FINANCE ROUTES ---
-app.get('/api/finance/accounts', async (req, res) => {
-    const companyId = getCompanyId(req);
-    if (!companyId) return res.status(403).json({ error: 'Company ID required' });
-    try {
-        await ensureDefaultAccount(companyId);
-        const [rows] = await pool.query('SELECT * FROM financial_accounts WHERE company_id = ? ORDER BY is_default DESC, name ASC', [companyId]);
-        res.json(rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/api/finance/accounts', async (req, res) => {
-    const companyId = getCompanyId(req);
-    if (!companyId) return res.status(403).json({ error: 'Company ID required' });
-    try {
-        const { name, balance } = req.body;
-        const id = 'acc_' + Math.random().toString(36).substr(2, 9);
-        await pool.query(
-            'INSERT INTO financial_accounts (id, company_id, name, balance) VALUES (?, ?, ?, ?)',
-            [id, companyId, name, balance || 0]
-        );
-        res.status(201).json({ id, name, balance });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.delete('/api/finance/accounts/:id', async (req, res) => {
-    try {
-        const [rows] = await pool.query('SELECT * FROM financial_accounts WHERE id = ?', [req.params.id]);
-        if (rows.length > 0 && rows[0].is_default) {
-            return res.status(400).json({ error: 'Cannot delete default account' });
-        }
-        await pool.query('DELETE FROM financial_accounts WHERE id = ?', [req.params.id]);
-        res.json({ message: 'Account deleted' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/api/finance/transfers', async (req, res) => {
-    const companyId = getCompanyId(req);
-    const conn = await pool.getConnection();
-    try {
-        await conn.beginTransaction();
-        const { fromAccountId, toAccountId, amount, description, date } = req.body;
-        
-        // Update balances
-        await conn.query('UPDATE financial_accounts SET balance = balance - ? WHERE id = ?', [amount, fromAccountId]);
-        await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [amount, toAccountId]);
-        
-        // Record transactions
-        const id1 = 'trans_' + Math.random().toString(36).substr(2, 9);
-        const id2 = 'trans_' + Math.random().toString(36).substr(2, 9);
-        
-        await conn.query(
-            'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, account_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [id1, companyId, 'expense', `Transferência para outra conta: ${description}`, amount, date, fromAccountId]
-        );
-        
-        await conn.query(
-            'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, account_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [id2, companyId, 'revenue', `Transferência recebida: ${description}`, amount, date, toAccountId]
-        );
-        
-        await conn.commit();
-        res.json({ message: 'Transfer completed' });
-    } catch (err) {
-        await conn.rollback();
-        res.status(500).json({ error: err.message });
-    } finally {
-        conn.release();
-    }
-});
 
 const calculateNextDueDate = (currentNextDue, trialEndsAt) => {
     const now = new Date();
@@ -931,6 +857,31 @@ app.post('/api/orders', async (req, res) => {
       await conn.query('INSERT INTO order_photos (order_id, photo_data) VALUES ?', [photoValues]);
     }
 
+    // NEW: Handle downPayment as a transaction
+    if (order.downPayment > 0) {
+        let targetAccountId = order.downPaymentAccountId;
+        if (!targetAccountId) {
+            const [accs] = await conn.query('SELECT id FROM financial_accounts WHERE company_id = ? AND is_default = 1', [companyId]);
+            if (accs.length > 0) targetAccountId = accs[0].id;
+            else {
+                const [allAccs] = await conn.query('SELECT id FROM financial_accounts WHERE company_id = ? LIMIT 1', [companyId]);
+                if (allAccs.length > 0) targetAccountId = allAccs[0].id;
+            }
+        }
+
+        if (targetAccountId) {
+            const amount = parseFloat(order.downPayment);
+            await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [amount, targetAccountId]);
+            
+            const transId = 'trans_' + Math.random().toString(36).substr(2, 9);
+            const formattedDate = new Date().toLocaleDateString('pt-BR');
+            await conn.query(
+                'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, paymentMethod, order_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [transId, companyId, 'revenue', `Entrada Pedido #${order.id}`, amount, formattedDate, order.paymentMethod || 'Não informado', order.id, targetAccountId]
+            );
+        }
+    }
+
     await conn.commit();
     res.status(201).json(order);
   } catch (err) {
@@ -1487,6 +1438,8 @@ app.get('/api/finance/accounts', async (req, res) => {
         res.json(rows.map(r => ({ 
             ...r, 
             balance: parseFloat(r.balance), 
+            initialBalance: parseFloat(r.initial_balance || 0),
+            initialBalanceDate: r.initial_balance_date,
             isDefault: !!r.is_default, 
             active: !!r.active,
             hasMovements: r.transactionCount > 0
@@ -1501,15 +1454,18 @@ app.post('/api/finance/accounts', async (req, res) => {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
-        const { name, balance } = req.body;
+        const { name, balance, initialBalance, initialBalanceDate } = req.body;
         const id = `acc_${Date.now()}`;
+        
+        const startBalance = initialBalance !== undefined ? parseFloat(initialBalance) : parseFloat(balance || 0);
+        const startDate = initialBalanceDate || new Date().toISOString().split('T')[0];
 
         await pool.query(
-            'INSERT INTO financial_accounts (id, company_id, name, balance, is_default, active) VALUES (?, ?, ?, ?, ?, ?)',
-            [id, companyId, name, balance || 0, false, true]
+            'INSERT INTO financial_accounts (id, company_id, name, balance, initial_balance, initial_balance_date, is_default, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, companyId, name, startBalance, startBalance, startDate, false, true]
         );
 
-        res.status(201).json({ id, companyId, name, balance: balance || 0, isDefault: false, active: true });
+        res.status(201).json({ id, companyId, name, balance: startBalance, initialBalance: startBalance, initialBalanceDate: startDate, isDefault: false, active: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1520,24 +1476,40 @@ app.patch('/api/finance/accounts/:id', async (req, res) => {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
-        const { name, balance, active } = req.body;
+        const { name, initialBalance, initialBalanceDate, active } = req.body;
         
-        let query = 'UPDATE financial_accounts SET ';
-        const params = [];
+        const [currentAcc] = await pool.query('SELECT * FROM financial_accounts WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+        if (currentAcc.length === 0) return res.status(404).json({ error: 'Account not found' });
+        
         const updates = [];
+        const params = [];
         
         if (name !== undefined) {
             updates.push('name = ?');
             params.push(name);
         }
-        if (balance !== undefined) {
-            updates.push('balance = ?');
-            params.push(balance);
+        
+        if (initialBalance !== undefined) {
+            const newInitial = parseFloat(initialBalance);
+            const oldInitial = parseFloat(currentAcc[0].initial_balance || 0);
+            const diff = newInitial - oldInitial;
+            
+            updates.push('initial_balance = ?');
+            params.push(newInitial);
+            
+            // Adjust current balance based on initial balance change
+            updates.push('balance = balance + ?');
+            params.push(diff);
         }
+        
+        if (initialBalanceDate !== undefined) {
+            updates.push('initial_balance_date = ?');
+            params.push(initialBalanceDate);
+        }
+
         if (active !== undefined) {
             // Prevent inactivation of default account
-            const [acc] = await pool.query('SELECT is_default FROM financial_accounts WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
-            if (acc.length > 0 && acc[0].is_default && !active) {
+            if (currentAcc[0].is_default && !active) {
                 return res.status(400).json({ error: 'A conta padrão não pode ser inativada.' });
             }
             updates.push('active = ?');
@@ -1546,7 +1518,7 @@ app.patch('/api/finance/accounts/:id', async (req, res) => {
         
         if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
         
-        query += updates.join(', ') + ' WHERE id = ? AND company_id = ?';
+        const query = 'UPDATE financial_accounts SET ' + updates.join(', ') + ' WHERE id = ? AND company_id = ?';
         params.push(req.params.id, companyId);
         
         await pool.query(query, params);
