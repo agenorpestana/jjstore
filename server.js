@@ -1109,7 +1109,46 @@ app.delete('/api/orders/:orderId/payments/:transactionId', async (req, res) => {
         const { orderId, transactionId } = req.params;
         const companyId = getCompanyId(req);
 
-        // 1. Get transaction details
+        // Handle Virtual Transaction Deletion (Legacy order payments not yet in DB)
+        if (transactionId.startsWith('VIRTUAL_PY_ORD:') || transactionId.startsWith('ORDER-PY-')) {
+            const [orderRows] = await conn.query('SELECT downPayment, paymentMethod FROM orders WHERE id = ? AND company_id = ?', [orderId, companyId]);
+            if (orderRows.length === 0) return res.status(404).json({ error: 'Order not found' });
+            
+            const order = orderRows[0];
+            let methods = order.paymentMethod ? order.paymentMethod.split(' + ') : [];
+            
+            let indexToRemove = -1;
+            let amountToRemove = 0;
+
+            if (transactionId.startsWith('VIRTUAL_PY_ORD:')) {
+                // Format: VIRTUAL_PY_ORD:orderId:IX:index:methodName
+                const parts = transactionId.split(':');
+                indexToRemove = parseInt(parts[3]);
+            } else {
+                // Fallback for old format: ORDER-PY-orderId-index-methodName
+                const parts = transactionId.split('-');
+                indexToRemove = parseInt(parts[3]);
+            }
+
+            if (indexToRemove >= 0 && indexToRemove < methods.length) {
+                const methodStr = methods[indexToRemove];
+                const amountMatch = methodStr.match(/R\$\s?([\d.,]+)/);
+                if (amountMatch) {
+                    amountToRemove = parseFloat(amountMatch[1].replace(/\./g, '').replace(',', '.'));
+                }
+                methods.splice(indexToRemove, 1);
+            }
+
+            const newDownPayment = Math.max(0, parseFloat(order.downPayment || 0) - amountToRemove);
+            const newPaymentMethod = methods.join(' + ');
+
+            await conn.query('UPDATE orders SET downPayment = ?, paymentMethod = ? WHERE id = ?', [newDownPayment, newPaymentMethod, orderId]);
+            
+            await conn.commit();
+            return res.json({ message: 'Virtual payment removed' });
+        }
+
+        // 1. Get transaction details (Real transaction)
         const [transRows] = await conn.query('SELECT * FROM finance_transactions WHERE id = ? AND company_id = ?', [transactionId, companyId]);
         if (transRows.length === 0) return res.status(404).json({ error: 'Transaction not found' });
         const trans = transRows[0];
@@ -1226,10 +1265,17 @@ app.get('/api/finance/transactions', async (req, res) => {
                     
                     if (amount > 0) {
                         // Check if this specific payment part is already in manualRows (to avoid duplicates)
-                        const isDuplicate = manualRows.some(m => m.order_id === order.id && m.amount === amount && m.date === transactionDate);
+                        // Use a more robust check for amount and order_id
+                        const isDuplicate = manualRows.some(m => 
+                            String(m.order_id) === String(order.id) && 
+                            Math.abs(parseFloat(m.amount) - amount) < 0.01 && 
+                            String(m.date) === String(transactionDate)
+                        );
+                        
                         if (!isDuplicate) {
                             orderTransactions.push({
-                                id: `ORDER-PY-${order.id}-${index}-${methodName.replace(/\s+/g, '-')}`,
+                                // Use a more robust separator to avoid issues with hyphens in order IDs
+                                id: `VIRTUAL_PY_ORD:${order.id}:IX:${index}:${methodName.replace(/[:\s]+/g, '-')}`,
                                 companyId: companyId,
                                 type: 'revenue',
                                 description: `Pagamento Pedido #${order.id} - ${order.customerName} (${methodName})`,
@@ -1299,6 +1345,32 @@ app.put('/api/finance/transactions/:id', async (req, res) => {
 
         const { type, description, amount, date, paymentMethod, accountId } = req.body;
         const transactionId = req.params.id;
+
+        // Handle Virtual Transaction Promotion (Legacy order payments not yet in DB)
+        if (transactionId.startsWith('VIRTUAL_PY_ORD:') || transactionId.startsWith('ORDER-PY-')) {
+            let orderId;
+            if (transactionId.startsWith('VIRTUAL_PY_ORD:')) {
+                orderId = transactionId.split(':')[1];
+            } else {
+                // Fallback for old virtual IDs if they still exist in client state
+                orderId = transactionId.split('-')[2];
+            }
+
+            const newId = `TX-PROM-${Date.now()}`;
+            await conn.query(
+                'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, paymentMethod, order_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [newId, companyId, type, description, amount, date, paymentMethod || null, orderId || null, accountId || null]
+            );
+
+            if (accountId) {
+                const balanceChange = type === 'revenue' ? amount : -amount;
+                await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [balanceChange, accountId]);
+            }
+
+            await conn.commit();
+            const [updatedRows] = await conn.query('SELECT * FROM finance_transactions WHERE id = ?', [newId]);
+            return res.json(updatedRows[0]);
+        }
 
         // Get old transaction
         const [oldRows] = await conn.query('SELECT * FROM finance_transactions WHERE id = ? AND company_id = ?', [transactionId, companyId]);
