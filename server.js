@@ -1282,6 +1282,10 @@ app.get('/api/finance/transactions', async (req, res) => {
 
             const [orderRows] = await pool.query(orderQuery, orderParams);
             
+            // Criamos uma cópia para "consumir" as transações manuais e evitar duplicatas
+            // se houver múltiplos pagamentos de mesmo valor no mesmo pedido.
+            let manualRowsForDuplicateCheck = [...manualRows];
+
             orderRows.forEach(order => {
                 const parts = (order.paymentMethod || '').split('+');
                 parts.forEach((p, index) => {
@@ -1302,22 +1306,24 @@ app.get('/api/finance/transactions', async (req, res) => {
                     
                     if (amount > 0) {
                         // Check if this specific payment part is already in manualRows (to avoid duplicates)
-                        // Use a more robust check for amount and order_id
-                        const isDuplicate = manualRows.some(m => {
+                        const duplicateIndex = manualRowsForDuplicateCheck.findIndex(m => {
                             const mOrderId = String(m.orderId || '').trim();
                             const oId = String(order.id || '').trim();
                             const mAmount = parseFloat(m.amount || 0);
-                            const mDate = String(m.date || '').trim();
-                            const tDate = String(transactionDate || '').trim();
                             
                             const idMatch = mOrderId === oId;
                             const amountMatch = Math.abs(mAmount - amount) < 0.01;
-                            const dateMatch = mDate === tDate;
                             
-                            return idMatch && amountMatch && dateMatch;
+                            // Se o ID do pedido e o valor coincidirem, consideramos duplicata 
+                            // mesmo que a data seja diferente, pois a data no financeiro pode ser a data de registro
+                            // e a data na string do pedido pode ser a data retroativa.
+                            return idMatch && amountMatch;
                         });
                         
-                        if (!isDuplicate) {
+                        if (duplicateIndex !== -1) {
+                            // Consumimos a transação para que não mascare outro pagamento de mesmo valor
+                            manualRowsForDuplicateCheck.splice(duplicateIndex, 1);
+                        } else {
                             orderTransactions.push({
                                 // Use a more robust separator to avoid issues with hyphens in order IDs
                                 id: `VIRTUAL_PY_ORD:${order.id}:IX:${index}:${methodName.replace(/[:\s]+/g, '-')}`,
