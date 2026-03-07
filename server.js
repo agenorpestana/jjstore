@@ -764,13 +764,19 @@ app.get('/api/orders', async (req, res) => {
     const fullOrders = await Promise.all(orders.map(async (order) => {
       const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
       const [timeline] = await pool.query('SELECT * FROM order_timeline WHERE order_id = ?', [order.id]);
-      // NÃO buscar fotos na listagem para performance
-      // const [photos] = await pool.query('SELECT photo_data FROM order_photos WHERE order_id = ?', [order.id]);
+      
+      // Fetch downPaymentAccountId from finance_transactions
+      const [trans] = await pool.query(
+        "SELECT account_id FROM finance_transactions WHERE company_id = ? AND order_id = ? AND description LIKE 'Entrada%' LIMIT 1",
+        [companyId, order.id]
+      );
+      const downPaymentAccountId = trans.length > 0 ? trans[0].account_id : null;
 
       return {
         ...order,
         total: parseFloat(order.total),
         downPayment: parseFloat(order.downPayment),
+        downPaymentAccountId,
         items: items.map(i => ({...i, price: parseFloat(i.price)})),
         timeline: timeline.map(t => ({...t, completed: !!t.completed})),
         photos: [], // Lista vazia na listagem
@@ -807,10 +813,18 @@ app.get('/api/orders/:id', async (req, res) => {
     const [timeline] = await pool.query('SELECT * FROM order_timeline WHERE order_id = ?', [order.id]);
     const [photos] = await pool.query('SELECT photo_data FROM order_photos WHERE order_id = ?', [order.id]);
 
+    // Fetch downPaymentAccountId from finance_transactions
+    const [trans] = await pool.query(
+      "SELECT account_id FROM finance_transactions WHERE company_id = ? AND order_id = ? AND description LIKE 'Entrada%' LIMIT 1",
+      [order.company_id, order.id]
+    );
+    const downPaymentAccountId = trans.length > 0 ? trans[0].account_id : null;
+
     const fullOrder = {
       ...order,
       total: parseFloat(order.total),
       downPayment: parseFloat(order.downPayment),
+      downPaymentAccountId,
       items: items.map(i => ({...i, price: parseFloat(i.price)})),
       timeline: timeline.map(t => ({...t, completed: !!t.completed})),
       photos: photos.map(p => p.photo_data),
@@ -895,16 +909,79 @@ app.post('/api/orders', async (req, res) => {
 
 app.put('/api/orders/:id', async (req, res) => {
   if (!pool) return res.status(500).json({error: "DB Not Init"});
+  const companyId = getCompanyId(req);
+  if (!companyId) return res.status(403).json({ error: 'Company ID required' });
+
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     const orderId = req.params.id;
     const order = req.body;
 
+    // Get current order to check if downPayment changed
+    const [currentRows] = await conn.query('SELECT downPayment FROM orders WHERE id = ?', [orderId]);
+    const oldDownPayment = currentRows.length > 0 ? parseFloat(currentRows[0].downPayment || 0) : 0;
+
     await conn.query(
       `UPDATE orders SET customerName=?, customerPhone=?, orderDate=?, estimatedDelivery=?, total=?, downPayment=?, paymentMethod=?, shippingAddress=?, pressingDate=?, printingDate=?, seamstress=?, quote_validity=?, notes=? WHERE id=?`,
       [order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.quoteValidity, order.notes, orderId]
     );
+
+    // Handle downPayment as a transaction if it's new or changed
+    if (order.downPayment > 0) {
+        // Check if an "Entrada" transaction already exists for this order
+        const [existingTrans] = await conn.query(
+            "SELECT id, amount, account_id FROM finance_transactions WHERE company_id = ? AND order_id = ? AND description LIKE 'Entrada%'",
+            [companyId, orderId]
+        );
+
+        let targetAccountId = order.downPaymentAccountId;
+        if (!targetAccountId) {
+            const [accs] = await conn.query('SELECT id FROM financial_accounts WHERE company_id = ? AND is_default = 1', [companyId]);
+            if (accs.length > 0) targetAccountId = accs[0].id;
+            else {
+                const [allAccs] = await conn.query('SELECT id FROM financial_accounts WHERE company_id = ? LIMIT 1', [companyId]);
+                if (allAccs.length > 0) targetAccountId = allAccs[0].id;
+            }
+        }
+
+        const amount = parseFloat(order.downPayment);
+        const formattedDate = new Date().toLocaleDateString('pt-BR');
+
+        if (existingTrans.length === 0) {
+            // Create new transaction if it doesn't exist
+            if (targetAccountId) {
+                await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [amount, targetAccountId]);
+                
+                const transId = 'trans_' + Math.random().toString(36).substr(2, 9);
+                await conn.query(
+                    'INSERT INTO finance_transactions (id, company_id, type, description, amount, date, paymentMethod, order_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    [transId, companyId, 'revenue', `Entrada Pedido #${orderId}`, amount, formattedDate, order.paymentMethod || 'Não informado', orderId, targetAccountId]
+                );
+            }
+        } else {
+            // Update existing transaction if amount or account changed
+            const trans = existingTrans[0];
+            const oldAmount = parseFloat(trans.amount);
+            const oldAccountId = trans.account_id;
+
+            if (oldAmount !== amount || oldAccountId !== targetAccountId) {
+                // Revert old account balance
+                if (oldAccountId) {
+                    await conn.query('UPDATE financial_accounts SET balance = balance - ? WHERE id = ?', [oldAmount, oldAccountId]);
+                }
+                // Apply new account balance
+                if (targetAccountId) {
+                    await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [amount, targetAccountId]);
+                }
+                // Update transaction
+                await conn.query(
+                    'UPDATE finance_transactions SET amount = ?, account_id = ?, paymentMethod = ? WHERE id = ?',
+                    [amount, targetAccountId, order.paymentMethod || 'Não informado', trans.id]
+                );
+            }
+        }
+    }
 
     await conn.query('DELETE FROM order_items WHERE order_id = ?', [orderId]);
     if (order.items && order.items.length > 0) {

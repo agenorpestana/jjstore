@@ -312,6 +312,7 @@ export const updateOrderFull = async (id: string, input: NewOrderInput): Promise
         shippingAddress: input.shippingAddress,
         paymentMethod: input.paymentMethod,
         downPayment: input.downPayment,
+        downPaymentAccountId: input.downPaymentAccountId,
         photos: input.photos || [],
         pressingDate: input.pressingDate,
         printingDate: input.printingDate, 
