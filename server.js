@@ -1158,7 +1158,7 @@ app.get('/api/finance/transactions', async (req, res) => {
 
         // Get transactions
         let manualQuery = `
-            SELECT t.*, a.name as accountName, t.account_id as accountId
+            SELECT t.*, a.name as accountName, t.account_id as accountId, t.order_id as orderId
             FROM finance_transactions t 
             LEFT JOIN financial_accounts a ON t.account_id = a.id 
             WHERE t.company_id = ?
@@ -1193,6 +1193,11 @@ app.get('/api/finance/transactions', async (req, res) => {
             let orderQuery = 'SELECT id, customerName, orderDate, paymentMethod, downPayment FROM orders WHERE company_id = ? AND downPayment > 0';
             const orderParams = [companyId];
 
+            if (orderId) {
+                orderQuery += " AND id = ?";
+                orderParams.push(orderId);
+            }
+
             if (startDate && endDate) {
                 orderQuery += " AND STR_TO_DATE(orderDate, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')";
                 orderParams.push(startDate, endDate);
@@ -1221,11 +1226,19 @@ app.get('/api/finance/transactions', async (req, res) => {
                     if (amount > 0) {
                         // Check if this specific payment part is already in manualRows (to avoid duplicates)
                         // Use a more robust check for amount and order_id
-                        const isDuplicate = manualRows.some(m => 
-                            String(m.order_id) === String(order.id) && 
-                            Math.abs(parseFloat(m.amount) - amount) < 0.01 && 
-                            String(m.date) === String(transactionDate)
-                        );
+                        const isDuplicate = manualRows.some(m => {
+                            const mOrderId = String(m.orderId || '').trim();
+                            const oId = String(order.id || '').trim();
+                            const mAmount = parseFloat(m.amount || 0);
+                            const mDate = String(m.date || '').trim();
+                            const tDate = String(transactionDate || '').trim();
+                            
+                            const idMatch = mOrderId === oId;
+                            const amountMatch = Math.abs(mAmount - amount) < 0.01;
+                            const dateMatch = mDate === tDate;
+                            
+                            return idMatch && amountMatch && dateMatch;
+                        });
                         
                         if (!isDuplicate) {
                             orderTransactions.push({
