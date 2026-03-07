@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Calendar, FileText, Search, Filter, Edit2, X, Wallet, ArrowRightLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Calendar, FileText, Search, Filter, Edit2, X, Wallet, ArrowRightLeft, ChevronLeft, ChevronRight, Power } from 'lucide-react';
 import { Transaction, FinancialAccount } from '../types';
 import { getTransactions, createTransaction, deleteTransaction, updateTransaction, getAccounts, createAccount, deleteAccount, updateAccount, transferBetweenAccounts } from '../services/mockData';
 
@@ -151,6 +151,15 @@ export const FinanceModule: React.FC = () => {
             });
         }
         setShowAccountModal(true);
+    };
+
+    const handleToggleAccountActive = async (account: FinancialAccount) => {
+        try {
+            await updateAccount(account.id, { active: !account.active });
+            loadData();
+        } catch (err: any) {
+            alert("Erro ao alterar status da conta: " + (err.message || "Erro desconhecido"));
+        }
     };
 
     const handleCreateAccount = async (e: React.FormEvent) => {
@@ -562,6 +571,15 @@ export const FinanceModule: React.FC = () => {
                                     </button>
                                     {!acc.is_default && (
                                         <button 
+                                            onClick={() => handleToggleAccountActive(acc)}
+                                            className={`p-2 rounded-xl transition-all ${acc.active ? 'text-gray-400 hover:text-amber-600 hover:bg-amber-50' : 'text-amber-600 bg-amber-50 hover:bg-amber-100'}`}
+                                            title={acc.active ? "Inativar conta" : "Ativar conta"}
+                                        >
+                                            <Power size={16} />
+                                        </button>
+                                    )}
+                                    {!acc.is_default && !acc.hasMovements && (
+                                        <button 
                                             onClick={() => handleDeleteAccount(acc.id)}
                                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
                                             title="Excluir conta"
@@ -735,20 +753,29 @@ export const FinanceModule: React.FC = () => {
                             </div>
 
                             {editingAccount && !editingAccount.is_default && (
-                                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-bold text-gray-900">Status da Conta</span>
-                                        <span className="text-xs text-gray-500">Contas inativas não aparecem em novos lançamentos</span>
+                                <div className="p-4 bg-gray-50 rounded-2xl space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-bold text-gray-900">Status da Conta</span>
+                                            <span className="text-xs text-gray-500">
+                                                {accountForm.active ? 'Conta Ativa' : 'Conta Inativa'}
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setAccountForm({ ...accountForm, active: !accountForm.active })}
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${accountForm.active ? 'bg-green-500' : 'bg-gray-300'}`}
+                                        >
+                                            <span
+                                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${accountForm.active ? 'translate-x-6' : 'translate-x-1'}`}
+                                            />
+                                        </button>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setAccountForm({ ...accountForm, active: !accountForm.active })}
-                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${accountForm.active ? 'bg-green-500' : 'bg-gray-300'}`}
-                                    >
-                                        <span
-                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${accountForm.active ? 'translate-x-6' : 'translate-x-1'}`}
-                                        />
-                                    </button>
+                                    {!accountForm.active && (
+                                        <p className="text-[10px] text-amber-600 font-medium leading-tight">
+                                            Contas inativas não aparecem em novos lançamentos, mas o histórico é preservado.
+                                        </p>
+                                    )}
                                 </div>
                             )}
 

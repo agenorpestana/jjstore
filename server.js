@@ -1477,8 +1477,20 @@ app.get('/api/finance/accounts', async (req, res) => {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
-        const [rows] = await pool.query('SELECT * FROM financial_accounts WHERE company_id = ?', [companyId]);
-        res.json(rows.map(r => ({ ...r, balance: parseFloat(r.balance), isDefault: !!r.is_default, active: !!r.active })));
+        const [rows] = await pool.query(`
+            SELECT a.*, 
+            (SELECT COUNT(*) FROM finance_transactions t WHERE t.account_id = a.id AND t.company_id = a.company_id) as transactionCount
+            FROM financial_accounts a 
+            WHERE a.company_id = ?
+        `, [companyId]);
+        
+        res.json(rows.map(r => ({ 
+            ...r, 
+            balance: parseFloat(r.balance), 
+            isDefault: !!r.is_default, 
+            active: !!r.active,
+            hasMovements: r.transactionCount > 0
+        })));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1523,6 +1535,11 @@ app.patch('/api/finance/accounts/:id', async (req, res) => {
             params.push(balance);
         }
         if (active !== undefined) {
+            // Prevent inactivation of default account
+            const [acc] = await pool.query('SELECT is_default FROM financial_accounts WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+            if (acc.length > 0 && acc[0].is_default && !active) {
+                return res.status(400).json({ error: 'A conta padrão não pode ser inativada.' });
+            }
             updates.push('active = ?');
             params.push(active);
         }

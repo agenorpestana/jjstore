@@ -88,6 +88,7 @@ export interface FinancialAccount {
   is_default: boolean;
   active: boolean;
   created_at: string;
+  hasMovements?: boolean;
 }
 
 export interface DashboardData {
