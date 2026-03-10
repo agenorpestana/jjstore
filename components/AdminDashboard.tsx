@@ -309,7 +309,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       setShowOrderModal(true);
   }
 
-  const handleOpenEditOrder = (order: Order) => {
+  const handleOpenEditOrder = async (order: Order) => {
+      // Se o pedido não tem fotos, buscamos o objeto completo do servidor
+      let fullOrder = order;
+      if (!order.photos || order.photos.length === 0) {
+          try {
+              const fetched = await getOrderById(order.id);
+              if (fetched) fullOrder = fetched;
+          } catch (err) {
+              console.error("Erro ao buscar detalhes do pedido para edição:", err);
+          }
+      }
+
       // Parse dates back to YYYY-MM-DD for input fields if possible
       const parseDateToInput = (dateStr?: string) => {
           if (!dateStr) return '';
@@ -321,50 +332,61 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       };
 
       setOrderForm({
-          customerName: order.customerName,
-          customerPhone: order.customerPhone,
-          shippingAddress: order.shippingAddress,
-          orderDate: parseDateToInput(order.orderDate),
-          estimatedDelivery: parseDateToInput(order.estimatedDelivery),
-          paymentMethod: order.paymentMethod, // Assuming this is string
-          downPayment: order.downPayment,
-          downPaymentAccountId: order.downPaymentAccountId || '',
-          photos: order.photos || [],
-          pressingDate: order.pressingDate || '',
-          printingDate: order.printingDate || '',
-          seamstress: order.seamstress || '',
-          items: order.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity })),
-          isQuote: order.currentStatus === OrderStatus.ORCAMENTO,
-          quoteValidity: order.quoteValidity || '',
-          notes: order.notes || '',
-          discount: order.discount || 0,
-          discountType: order.discountType || 'fixed'
+          customerName: fullOrder.customerName,
+          customerPhone: fullOrder.customerPhone,
+          shippingAddress: fullOrder.shippingAddress,
+          orderDate: parseDateToInput(fullOrder.orderDate),
+          estimatedDelivery: parseDateToInput(fullOrder.estimatedDelivery),
+          paymentMethod: fullOrder.paymentMethod, // Assuming this is string
+          downPayment: fullOrder.downPayment,
+          downPaymentAccountId: fullOrder.downPaymentAccountId || '',
+          photos: fullOrder.photos || [],
+          pressingDate: fullOrder.pressingDate || '',
+          printingDate: fullOrder.printingDate || '',
+          seamstress: fullOrder.seamstress || '',
+          items: fullOrder.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity })),
+          isQuote: fullOrder.currentStatus === OrderStatus.ORCAMENTO,
+          quoteValidity: fullOrder.quoteValidity || '',
+          notes: fullOrder.notes || '',
+          discount: fullOrder.discount || 0,
+          discountType: fullOrder.discountType || 'fixed'
       });
-      setIsEditingFullOrder(order.id);
+      setIsEditingFullOrder(fullOrder.id);
       setShowOrderModal(true);
   }
 
   // --- NOVO: Função para Duplicar Pedido ---
-  const handleDuplicateOrder = (order: Order) => {
+  const handleDuplicateOrder = async (order: Order) => {
+      // Se o pedido não tem fotos, buscamos o objeto completo do servidor
+      let fullOrder = order;
+      if (!order.photos || order.photos.length === 0) {
+          try {
+              const fetched = await getOrderById(order.id);
+              if (fetched) fullOrder = fetched;
+          } catch (err) {
+              console.error("Erro ao buscar detalhes do pedido para duplicação:", err);
+          }
+      }
+
       setOrderForm({
-          customerName: order.customerName,
-          customerPhone: order.customerPhone,
-          shippingAddress: order.shippingAddress,
+          customerName: fullOrder.customerName,
+          customerPhone: fullOrder.customerPhone,
+          shippingAddress: fullOrder.shippingAddress,
           orderDate: new Date().toISOString().split('T')[0], // Data de hoje
           estimatedDelivery: '', // Limpa previsão
           paymentMethod: 'Pix', // Reset financeiro
           downPayment: 0, // Reset financeiro
           downPaymentAccountId: '',
-          photos: order.photos || [],
+          photos: fullOrder.photos || [],
           pressingDate: '',
           printingDate: '',
           seamstress: '',
-          items: order.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity })),
-          isQuote: order.currentStatus === OrderStatus.ORCAMENTO,
-          quoteValidity: order.quoteValidity || '', // Mantém validade se for orçamento
-          notes: order.notes || '',
-          discount: order.discount || 0,
-          discountType: order.discountType || 'fixed'
+          items: fullOrder.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity })),
+          isQuote: fullOrder.currentStatus === OrderStatus.ORCAMENTO,
+          quoteValidity: fullOrder.quoteValidity || '', // Mantém validade se for orçamento
+          notes: fullOrder.notes || '',
+          discount: fullOrder.discount || 0,
+          discountType: fullOrder.discountType || 'fixed'
       });
       setIsEditingFullOrder(null); // Trata como um NOVO pedido
       setShowOrderModal(true);
