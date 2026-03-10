@@ -97,10 +97,6 @@ async function initDatabase() {
         FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
       );
 
-      // Add columns if they don't exist (for existing databases)
-      try { await pool.query("ALTER TABLE orders ADD COLUMN discount DECIMAL(10, 2) DEFAULT 0"); } catch(e) {}
-      try { await pool.query("ALTER TABLE orders ADD COLUMN discountType VARCHAR(20) DEFAULT 'fixed'"); } catch(e) {}
-
       CREATE TABLE IF NOT EXISTS order_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
         order_id VARCHAR(50),
@@ -167,6 +163,8 @@ async function initDatabase() {
 
     // --- MIGRATION CHECK ---
     const migrationQueries = [
+       "ALTER TABLE orders ADD COLUMN discount DECIMAL(10, 2) DEFAULT 0",
+       "ALTER TABLE orders ADD COLUMN discountType VARCHAR(20) DEFAULT 'fixed'",
        "ALTER TABLE orders ADD COLUMN pressingDate VARCHAR(20)",
        "ALTER TABLE orders ADD COLUMN printingDate VARCHAR(20)",
        "ALTER TABLE orders ADD COLUMN seamstress VARCHAR(100)",
