@@ -1947,16 +1947,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                 value={orderForm.discount || ''}
                                 onChange={e => setOrderForm({...orderForm, discount: Number(e.target.value)})}
                             />
-                            <div className="flex items-center bg-gray-100 rounded-lg px-2 border border-gray-300">
-                                <label className="flex items-center gap-1 cursor-pointer text-xs font-medium text-gray-600">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={orderForm.discountType === 'percentage'}
-                                        onChange={e => setOrderForm({...orderForm, discountType: e.target.checked ? 'percentage' : 'fixed'})}
-                                        className="rounded text-primary focus:ring-primary"
-                                    />
+                            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg border border-gray-300">
+                                <button
+                                    type="button"
+                                    onClick={() => setOrderForm({...orderForm, discountType: 'fixed'})}
+                                    className={`px-3 py-1 rounded-md text-xs font-bold transition ${orderForm.discountType === 'fixed' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    R$
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setOrderForm({...orderForm, discountType: 'percentage'})}
+                                    className={`px-3 py-1 rounded-md text-xs font-bold transition ${orderForm.discountType === 'percentage' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
                                     %
-                                </label>
+                                </button>
                             </div>
                         </div>
                     </div>
