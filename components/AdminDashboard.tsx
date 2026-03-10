@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart, Copy, Check, FileText, ArrowRight, LayoutDashboard, Wallet } from 'lucide-react';
 import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, FinancialAccount } from '../types';
-import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, deleteOrderPayment, convertQuoteToOrder, updateEmployee, getAccounts, getTransactions } from '../services/mockData';
+import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, deleteOrderPayment, convertQuoteToOrder, updateEmployee, getAccounts, getTransactions, getOrderById } from '../services/mockData';
 import { Dashboard } from './Dashboard';
 import { FinanceModule } from './FinanceModule';
 
@@ -111,6 +111,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   const [managingStatusOrder, setManagingStatusOrder] = useState<Order | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
   const [viewingOrderTransactions, setViewingOrderTransactions] = useState<any[]>([]);
+  const lastFetchedOrderId = useRef<string | null>(null);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   
   // Payment State for View Modal
@@ -127,6 +128,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       if (viewingOrder) {
           const fetchOrderData = async () => {
               try {
+                  // Se o pedido visualizado não tem fotos, buscamos o objeto completo do servidor
+                  if (lastFetchedOrderId.current !== viewingOrder.id && (!viewingOrder.photos || viewingOrder.photos.length === 0)) {
+                      const fullOrder = await getOrderById(viewingOrder.id);
+                      if (fullOrder) {
+                          lastFetchedOrderId.current = viewingOrder.id;
+                          setViewingOrder(fullOrder);
+                          return;
+                      }
+                  }
+
                   const accounts = await getAccounts();
                   setFinanceAccounts(accounts);
                   const defaultAcc = accounts.find(a => a.is_default) || accounts[0];
@@ -141,6 +152,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           };
           fetchOrderData();
       } else {
+          lastFetchedOrderId.current = null;
           setViewingOrderTransactions([]);
       }
   }, [viewingOrder]);
@@ -266,7 +278,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     // Novos campos
     isQuote: false,
     quoteValidity: '',
-    notes: ''
+    notes: '',
+    discount: 0,
+    discountType: 'fixed'
   });
   
   // Item Editing State
@@ -280,7 +294,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         paymentMethod: 'Pix', downPayment: 0, downPaymentAccountId: '', photos: [], items: [],
         pressingDate: '', printingDate: '', seamstress: '',
         isQuote: activeTab === 'quotes', // Default to true if in quotes tab
-        quoteValidity: '', notes: ''
+        quoteValidity: '', notes: '',
+        discount: 0, discountType: 'fixed'
     });
     setTempItem({ name: '', size: '', price: '', quantity: '1' });
     setEditingItemIndex(null);
@@ -321,7 +336,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           items: order.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity })),
           isQuote: order.currentStatus === OrderStatus.ORCAMENTO,
           quoteValidity: order.quoteValidity || '',
-          notes: order.notes || ''
+          notes: order.notes || '',
+          discount: order.discount || 0,
+          discountType: order.discountType || 'fixed'
       });
       setIsEditingFullOrder(order.id);
       setShowOrderModal(true);
@@ -345,7 +362,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           items: order.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity })),
           isQuote: order.currentStatus === OrderStatus.ORCAMENTO,
           quoteValidity: order.quoteValidity || '', // Mantém validade se for orçamento
-          notes: order.notes || ''
+          notes: order.notes || '',
+          discount: order.discount || 0,
+          discountType: order.discountType || 'fixed'
       });
       setIsEditingFullOrder(null); // Trata como um NOVO pedido
       setShowOrderModal(true);
@@ -452,9 +471,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     }
     
     // Validate Down Payment
-    const total = orderForm.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const subtotal = orderForm.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    let discountAmount = 0;
+    if (orderForm.discount && orderForm.discount > 0) {
+        if (orderForm.discountType === 'percentage') {
+            discountAmount = subtotal * (orderForm.discount / 100);
+        } else {
+            discountAmount = orderForm.discount;
+        }
+    }
+    const total = Math.max(0, subtotal - discountAmount);
+    
     if (orderForm.downPayment > total) {
-        alert("O valor de entrada não pode ser maior que o valor total dos produtos.");
+        alert("O valor de entrada não pode ser maior que o valor total (com desconto).");
         return;
     }
     
@@ -466,7 +495,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     // Helper to format money for saving
     const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
-    let finalOrderForm = { ...orderForm };
+    let finalOrderForm = { ...orderForm, total };
 
     // Se for criação de novo pedido E tiver entrada, formata o método para incluir o valor
     if (!isEditingFullOrder && orderForm.downPayment > 0) {
@@ -1866,16 +1895,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 </div>
               </div>
 
-              {/* Observação Geral */}
-              <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Observações Gerais</label>
-                  <textarea 
-                      className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none h-24"
-                      placeholder="Detalhes adicionais, instruções de produção, etc."
-                      value={orderForm.notes || ''}
-                      onChange={e => setOrderForm({...orderForm, notes: e.target.value})}
-                  />
-              </div>
+                {/* Observação Geral */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Desconto</label>
+                        <div className="flex gap-2">
+                            <input 
+                                type="number" 
+                                className="flex-1 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
+                                placeholder="0.00"
+                                value={orderForm.discount || ''}
+                                onChange={e => setOrderForm({...orderForm, discount: Number(e.target.value)})}
+                            />
+                            <div className="flex items-center bg-gray-100 rounded-lg px-2 border border-gray-300">
+                                <label className="flex items-center gap-1 cursor-pointer text-xs font-medium text-gray-600">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={orderForm.discountType === 'percentage'}
+                                        onChange={e => setOrderForm({...orderForm, discountType: e.target.checked ? 'percentage' : 'fixed'})}
+                                        className="rounded text-primary focus:ring-primary"
+                                    />
+                                    %
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações Gerais</label>
+                        <textarea 
+                            className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none h-[42px] resize-none"
+                            placeholder="Detalhes adicionais..."
+                            value={orderForm.notes || ''}
+                            onChange={e => setOrderForm({...orderForm, notes: e.target.value})}
+                        />
+                    </div>
+                </div>
 
             </div>
             <div className="p-4 bg-gray-50 flex justify-end gap-2 border-t border-gray-100">
@@ -2129,7 +2183,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                              <div className="flex flex-col md:flex-row justify-between gap-6">
                                  <div className="flex-1 space-y-2">
                                      <div className="flex justify-between items-center text-sm">
-                                         <span className="text-gray-600">Total:</span>
+                                         <span className="text-gray-600">Subtotal:</span>
+                                         <span className="text-gray-900">
+                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingOrder.items.reduce((acc, item) => acc + (item.price * item.quantity), 0))}
+                                         </span>
+                                     </div>
+                                     {viewingOrder.discount > 0 && (
+                                         <div className="flex justify-between items-center text-sm">
+                                             <span className="text-gray-600">Desconto ({viewingOrder.discountType === 'percentage' ? `${viewingOrder.discount}%` : 'Fixo'}):</span>
+                                             <span className="text-red-600">
+                                                 -{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                                     viewingOrder.discountType === 'percentage' 
+                                                     ? (viewingOrder.items.reduce((acc, item) => acc + (item.price * item.quantity), 0) * (viewingOrder.discount / 100))
+                                                     : viewingOrder.discount
+                                                 )}
+                                             </span>
+                                         </div>
+                                     )}
+                                     <div className="flex justify-between items-center text-sm">
+                                         <span className="text-gray-600 font-bold">Total:</span>
                                          <span className="font-bold text-lg text-gray-900">
                                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingOrder.total)}
                                          </span>

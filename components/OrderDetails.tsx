@@ -125,8 +125,26 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
              </div>
              <div className="border-t border-gray-200 my-2"></div>
              <div className="flex justify-between">
-                 <span className="text-gray-600">Valor Total do Pedido</span>
-                 <span className="text-gray-900 font-bold">
+                 <span className="text-gray-600">Subtotal</span>
+                 <span className="text-gray-900">
+                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0))}
+                 </span>
+             </div>
+             {order.discount && order.discount > 0 && (
+                 <div className="flex justify-between text-red-600">
+                     <span>Desconto ({order.discountType === 'percentage' ? `${order.discount}%` : 'Fixo'})</span>
+                     <span>
+                         - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                             order.discountType === 'percentage' 
+                             ? (order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0) * (order.discount / 100))
+                             : order.discount
+                         )}
+                     </span>
+                 </div>
+             )}
+             <div className="flex justify-between font-bold text-gray-900">
+                 <span>Valor Total do Pedido</span>
+                 <span>
                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total)}
                  </span>
              </div>

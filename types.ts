@@ -47,6 +47,8 @@ export interface Order {
   quoteValidity?: string;
   notes?: string;
   downPaymentAccountId?: string;
+  discount?: number;
+  discountType?: 'percentage' | 'fixed';
 }
 
 export interface NewOrderInput {
@@ -67,6 +69,8 @@ export interface NewOrderInput {
   isQuote?: boolean;
   quoteValidity?: string;
   notes?: string;
+  discount?: number;
+  discountType?: 'percentage' | 'fixed';
 }
 
 export interface Transaction {

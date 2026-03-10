@@ -92,8 +92,14 @@ async function initDatabase() {
         currentStatus VARCHAR(50),
         quote_validity VARCHAR(20),
         notes TEXT,
+        discount DECIMAL(10, 2) DEFAULT 0,
+        discountType VARCHAR(20) DEFAULT 'fixed',
         FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
       );
+
+      // Add columns if they don't exist (for existing databases)
+      try { await pool.query("ALTER TABLE orders ADD COLUMN discount DECIMAL(10, 2) DEFAULT 0"); } catch(e) {}
+      try { await pool.query("ALTER TABLE orders ADD COLUMN discountType VARCHAR(20) DEFAULT 'fixed'"); } catch(e) {}
 
       CREATE TABLE IF NOT EXISTS order_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -780,6 +786,8 @@ app.get('/api/orders', async (req, res) => {
         items: items.map(i => ({...i, price: parseFloat(i.price)})),
         timeline: timeline.map(t => ({...t, completed: !!t.completed})),
         photos: [], // Lista vazia na listagem
+        discount: parseFloat(order.discount || 0),
+        discountType: order.discountType || 'fixed',
         // Mapeamento correto para o Frontend
         quoteValidity: order.quote_validity,
         notes: order.notes
@@ -828,6 +836,8 @@ app.get('/api/orders/:id', async (req, res) => {
       items: items.map(i => ({...i, price: parseFloat(i.price)})),
       timeline: timeline.map(t => ({...t, completed: !!t.completed})),
       photos: photos.map(p => p.photo_data),
+      discount: parseFloat(order.discount || 0),
+      discountType: order.discountType || 'fixed',
       // Mapeamento correto para o Frontend
       quoteValidity: order.quote_validity,
       notes: order.notes
@@ -851,9 +861,9 @@ app.post('/api/orders', async (req, res) => {
     const order = req.body;
 
     await conn.query(
-      `INSERT INTO orders (id, company_id, customerName, customerPhone, orderDate, estimatedDelivery, total, downPayment, paymentMethod, shippingAddress, pressingDate, printingDate, seamstress, currentStatus, quote_validity, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [order.id, companyId, order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.currentStatus, order.quoteValidity, order.notes]
+      `INSERT INTO orders (id, company_id, customerName, customerPhone, orderDate, estimatedDelivery, total, downPayment, paymentMethod, shippingAddress, pressingDate, printingDate, seamstress, currentStatus, quote_validity, notes, discount, discountType)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [order.id, companyId, order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.currentStatus, order.quoteValidity, order.notes, order.discount || 0, order.discountType || 'fixed']
     );
 
     if (order.items && order.items.length > 0) {
@@ -923,8 +933,8 @@ app.put('/api/orders/:id', async (req, res) => {
     const oldDownPayment = currentRows.length > 0 ? parseFloat(currentRows[0].downPayment || 0) : 0;
 
     await conn.query(
-      `UPDATE orders SET customerName=?, customerPhone=?, orderDate=?, estimatedDelivery=?, total=?, downPayment=?, paymentMethod=?, shippingAddress=?, pressingDate=?, printingDate=?, seamstress=?, quote_validity=?, notes=? WHERE id=?`,
-      [order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.quoteValidity, order.notes, orderId]
+      `UPDATE orders SET customerName=?, customerPhone=?, orderDate=?, estimatedDelivery=?, total=?, downPayment=?, paymentMethod=?, shippingAddress=?, pressingDate=?, printingDate=?, seamstress=?, quote_validity=?, notes=?, discount=?, discountType=? WHERE id=?`,
+      [order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.quoteValidity, order.notes, order.discount || 0, order.discountType || 'fixed', orderId]
     );
 
     // Handle downPayment as a transaction if it's new or changed
