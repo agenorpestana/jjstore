@@ -226,7 +226,15 @@ export const getAllOrders = async (): Promise<Order[]> => {
 
 export const createOrder = async (input: NewOrderInput): Promise<Order> => {
   const id = Math.floor(10000 + Math.random() * 90000).toString();
-  const total = input.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const subtotal = input.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  let total = subtotal;
+  if (input.discount && input.discount > 0) {
+    if (input.discountType === 'percentage') {
+      total = subtotal * (1 - input.discount / 100);
+    } else {
+      total = subtotal - input.discount;
+    }
+  }
   
   const formatDate = (dateString: string) => {
     if(dateString && dateString.includes('-')) {
@@ -247,6 +255,8 @@ export const createOrder = async (input: NewOrderInput): Promise<Order> => {
     paymentMethod: input.paymentMethod,
     downPayment: input.downPayment,
     downPaymentAccountId: input.downPaymentAccountId,
+    discount: input.discount || 0,
+    discountType: input.discountType || 'fixed',
     // Se for orçamento, usa status ORCAMENTO, senão PEDIDO_FEITO
     currentStatus: input.isQuote ? OrderStatus.ORCAMENTO : OrderStatus.PEDIDO_FEITO,
     total,
@@ -302,7 +312,15 @@ export const updateOrderFull = async (id: string, input: NewOrderInput): Promise
         return dateString;
     };
 
-    const total = input.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const subtotal = input.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    let total = subtotal;
+    if (input.discount && input.discount > 0) {
+        if (input.discountType === 'percentage') {
+            total = subtotal * (1 - input.discount / 100);
+        } else {
+            total = subtotal - input.discount;
+        }
+    }
 
     const updatedData = {
         customerName: input.customerName,
@@ -320,6 +338,8 @@ export const updateOrderFull = async (id: string, input: NewOrderInput): Promise
         // Novos Campos
         quoteValidity: input.quoteValidity,
         notes: input.notes,
+        discount: input.discount || 0,
+        discountType: input.discountType || 'fixed',
         total: total,
         items: input.items.map((item, idx) => ({
             ...item,

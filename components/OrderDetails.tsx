@@ -142,7 +142,7 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
                      </span>
                  </div>
              )}
-             <div className="flex justify-between font-bold text-gray-900">
+             <div className="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-2">
                  <span>Valor Total do Pedido</span>
                  <span>
                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total)}

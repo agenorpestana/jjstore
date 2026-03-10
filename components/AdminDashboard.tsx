@@ -701,6 +701,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   const handlePrintOrder = () => {
     if (!viewingOrder) return;
     const { summary, totalItems } = getSizeSummary(viewingOrder.items);
+    const subtotal = viewingOrder.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
     const printWindow = window.open('', '', 'width=900,height=800');
     if (!printWindow) return;
 
@@ -863,8 +864,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         </div>
 
         ${isQuote ? `
-        <div class="finance-total-box">
-            <strong>TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingOrder.total)}</strong>
+        <div class="finance-total-box" style="display: flex; flex-direction: column; align-items: flex-end; gap: 5px; margin-top: 20px;">
+            <div style="font-size: 14px; color: #4b5563;">Subtotal: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(subtotal)}</div>
+            ${viewingOrder.discount && viewingOrder.discount > 0 ? `
+                <div style="font-size: 14px; color: #e53e3e;">
+                    Desconto (${viewingOrder.discountType === 'percentage' ? viewingOrder.discount + '%' : 'Fixo'}): 
+                    - ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                        viewingOrder.discountType === 'percentage' ? subtotal * (viewingOrder.discount / 100) : viewingOrder.discount
+                    )}
+                </div>
+            ` : ''}
+            <div style="font-size: 18px; font-weight: bold; color: #111827; border-top: 1px solid #e5e7eb; padding-top: 5px; margin-top: 5px;">
+                TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingOrder.total)}
+            </div>
         </div>
         ` : ''}
 
@@ -1917,8 +1929,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 </div>
               </div>
 
-                {/* Observação Geral */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Financeiro e Observações */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-gray-100 pt-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Subtotal</label>
+                        <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg font-semibold text-gray-700">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(orderForm.items.reduce((acc, item) => acc + (item.price * item.quantity), 0))}
+                        </div>
+                    </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Desconto</label>
                         <div className="flex gap-2">
@@ -1943,9 +1961,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         </div>
                     </div>
                     <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Total Final</label>
+                        <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg font-bold text-primary">
+                            {(() => {
+                                const sub = orderForm.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+                                let tot = sub;
+                                if (orderForm.discount && orderForm.discount > 0) {
+                                    if (orderForm.discountType === 'percentage') {
+                                        tot = sub * (1 - orderForm.discount / 100);
+                                    } else {
+                                        tot = sub - orderForm.discount;
+                                    }
+                                }
+                                return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tot);
+                            })()}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                    <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Observações Gerais</label>
                         <textarea 
-                            className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none h-[42px] resize-none"
+                            className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none h-[60px] resize-none"
                             placeholder="Detalhes adicionais..."
                             value={orderForm.notes || ''}
                             onChange={e => setOrderForm({...orderForm, notes: e.target.value})}
