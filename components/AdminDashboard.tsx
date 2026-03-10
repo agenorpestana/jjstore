@@ -1930,7 +1930,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
               </div>
 
                 {/* Financeiro e Observações */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-gray-100 pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-gray-100 pt-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-500 mb-1">Subtotal</label>
                         <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg font-semibold text-gray-700">
@@ -1942,12 +1942,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         <div className="flex gap-2">
                             <input 
                                 type="number" 
-                                className="flex-1 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
+                                className="flex-1 min-w-0 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
                                 placeholder="0.00"
                                 value={orderForm.discount || ''}
                                 onChange={e => setOrderForm({...orderForm, discount: Number(e.target.value)})}
                             />
-                            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg border border-gray-300">
+                            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg border border-gray-300 flex-shrink-0">
                                 <button
                                     type="button"
                                     onClick={() => setOrderForm({...orderForm, discountType: 'fixed'})}
