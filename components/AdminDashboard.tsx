@@ -91,6 +91,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   // Search, Filter & Pagination State
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL'); // NEW: Status Filter
+  const [dateStart, setDateStart] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [dateEnd, setDateEnd] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dateFilterField, setDateFilterField] = useState<'orderDate' | 'estimatedDelivery'>('orderDate');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -206,7 +213,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
     const matchesStatus = statusFilter === 'ALL' || order.currentStatus === statusFilter;
 
-    return matchesSearch && matchesStatus && matchesTab;
+    // Date Filtering
+    const parseDateToComparable = (dateStr?: string) => {
+        if (!dateStr) return '';
+        if (dateStr.includes('/')) {
+            const [d, m, y] = dateStr.split('/');
+            return `${y}-${m}-${d}`;
+        }
+        return dateStr || '';
+    };
+
+    const orderDateInput = parseDateToComparable(order[dateFilterField]);
+    const matchesDate = (!dateStart || orderDateInput >= dateStart) && 
+                        (!dateEnd || orderDateInput <= dateEnd);
+
+    return matchesSearch && matchesStatus && matchesTab && matchesDate;
   });
 
   // Reverse to show newest first (Last 10 orders)
@@ -1105,38 +1126,100 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         {(activeTab === 'orders' || activeTab === 'quotes') && (
             <div className="space-y-4">
                 {/* Search Bar & Filter */}
-                <div className="flex flex-col md:flex-row gap-4">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                        <input 
-                            type="text" 
-                            placeholder={`Buscar ${activeTab === 'quotes' ? 'orçamento' : 'pedido'} por ID ou Nome...`} 
-                            className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
-                            value={searchTerm}
-                            onChange={handleSearchChange}
-                        />
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col md:flex-row gap-4">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                            <input 
+                                type="text" 
+                                placeholder={`Buscar ${activeTab === 'quotes' ? 'orçamento' : 'pedido'} por ID ou Nome...`} 
+                                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
+                                value={searchTerm}
+                                onChange={handleSearchChange}
+                            />
+                        </div>
+                        {/* Status Filter - Only show relevant filters */}
+                        <div className="w-full md:w-48">
+                            <select 
+                                className="w-full h-full border border-gray-200 rounded-xl px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-sm"
+                                value={statusFilter}
+                                onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                            >
+                                <option value="ALL">Todos os Status</option>
+                                {activeTab === 'orders' && (
+                                    <>
+                                        <option value={OrderStatus.PEDIDO_FEITO}>Pedido Feito</option>
+                                        <option value={OrderStatus.EM_PRODUCAO}>Em Produção</option>
+                                        <option value={OrderStatus.AGUARDANDO_RETIRADA}>Aguardando Retirada</option>
+                                        <option value={OrderStatus.CONCLUIDO}>Concluído</option>
+                                        <option value={OrderStatus.CANCELADO}>Cancelado</option>
+                                    </>
+                                )}
+                                {activeTab === 'quotes' && (
+                                    <option value={OrderStatus.ORCAMENTO}>Orçamento</option>
+                                )}
+                            </select>
+                        </div>
                     </div>
-                    {/* Status Filter - Only show relevant filters */}
-                    <div className="w-full md:w-48">
-                        <select 
-                            className="w-full h-full border border-gray-200 rounded-xl px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-sm"
-                            value={statusFilter}
-                            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+
+                    {/* Date Filters */}
+                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col md:flex-row items-center gap-4">
+                        <div className="flex items-center gap-2 w-full md:w-auto">
+                            <Calendar size={18} className="text-gray-400" />
+                            <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Filtrar por data:</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 w-full md:w-auto">
+                            <input 
+                                type="date" 
+                                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                value={dateStart}
+                                onChange={(e) => { setDateStart(e.target.value); setCurrentPage(1); }}
+                            />
+                            <span className="text-gray-400">até</span>
+                            <input 
+                                type="date" 
+                                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                value={dateEnd}
+                                onChange={(e) => { setDateEnd(e.target.value); setCurrentPage(1); }}
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-4 w-full md:w-auto md:ml-4">
+                            <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
+                                <input 
+                                    type="radio" 
+                                    name="dateFilterType"
+                                    checked={dateFilterField === 'orderDate'}
+                                    onChange={() => { setDateFilterField('orderDate'); setCurrentPage(1); }}
+                                    className="text-primary focus:ring-primary"
+                                />
+                                Data Pedido
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
+                                <input 
+                                    type="radio" 
+                                    name="dateFilterType"
+                                    checked={dateFilterField === 'estimatedDelivery'}
+                                    onChange={() => { setDateFilterField('estimatedDelivery'); setCurrentPage(1); }}
+                                    className="text-primary focus:ring-primary"
+                                />
+                                Data Entrega
+                            </label>
+                        </div>
+
+                        <button 
+                            onClick={() => {
+                                const d = new Date();
+                                setDateEnd(d.toISOString().split('T')[0]);
+                                d.setDate(d.getDate() - 30);
+                                setDateStart(d.toISOString().split('T')[0]);
+                                setCurrentPage(1);
+                            }}
+                            className="text-xs text-primary hover:underline font-medium md:ml-auto"
                         >
-                            <option value="ALL">Todos os Status</option>
-                            {activeTab === 'orders' && (
-                                <>
-                                    <option value={OrderStatus.PEDIDO_FEITO}>Pedido Feito</option>
-                                    <option value={OrderStatus.EM_PRODUCAO}>Em Produção</option>
-                                    <option value={OrderStatus.AGUARDANDO_RETIRADA}>Aguardando Retirada</option>
-                                    <option value={OrderStatus.CONCLUIDO}>Concluído</option>
-                                    <option value={OrderStatus.CANCELADO}>Cancelado</option>
-                                </>
-                            )}
-                            {activeTab === 'quotes' && (
-                                <option value={OrderStatus.ORCAMENTO}>Orçamento</option>
-                            )}
-                        </select>
+                            Últimos 30 dias
+                        </button>
                     </div>
                 </div>
 
