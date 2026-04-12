@@ -5,6 +5,7 @@ import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSetti
 import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, deleteOrderPayment, convertQuoteToOrder, updateEmployee, getAccounts, getTransactions, getOrderById } from '../services/mockData';
 import { Dashboard } from './Dashboard';
 import { FinanceModule } from './FinanceModule';
+import { ReportsModule } from './ReportsModule';
 
 interface AdminDashboardProps {
   currentUser: Employee;
@@ -13,7 +14,7 @@ interface AdminDashboardProps {
   onUpdateSettings: () => void;
 }
 
-type Tab = 'dashboard' | 'orders' | 'quotes' | 'finance' | 'employees' | 'settings' | 'subscription';
+type Tab = 'dashboard' | 'orders' | 'quotes' | 'finance' | 'reports' | 'employees' | 'settings' | 'subscription';
 
 // --- Função Auxiliar de Compressão de Imagem ---
 const compressImage = (file: File): Promise<string> => {
@@ -1072,6 +1073,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 )}
                 {isAdmin && (
                     <button 
+                        onClick={() => setActiveTab('reports')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'reports' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        <ClipboardList size={16} /> Relatórios
+                    </button>
+                )}
+                {isAdmin && (
+                    <button 
                         onClick={() => setActiveTab('employees')}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'employees' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
@@ -1121,6 +1130,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
         {/* --- FINANCE TAB --- */}
         {activeTab === 'finance' && isAdmin && <FinanceModule />}
+
+        {/* --- REPORTS TAB --- */}
+        {activeTab === 'reports' && isAdmin && <ReportsModule />}
 
         {/* --- ORDERS & QUOTES TAB --- */}
         {(activeTab === 'orders' || activeTab === 'quotes') && (
