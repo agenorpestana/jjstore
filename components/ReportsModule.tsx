@@ -75,8 +75,13 @@ export const ReportsModule: React.FC = () => {
 
     const formatDate = (dateStr: string) => {
         if (!dateStr) return '-';
-        const [y, m, d] = dateStr.split('-');
-        return `${d}/${m}/${y}`;
+        if (dateStr.includes('/')) return dateStr;
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            const [y, m, d] = parts;
+            return `${d}/${m}/${y}`;
+        }
+        return dateStr;
     };
 
     return (
@@ -126,7 +131,7 @@ export const ReportsModule: React.FC = () => {
             </div>
 
             {/* Content Area */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden print:border-none print:shadow-none">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden print:border-none print:shadow-none print-section">
                 {reportType === 'orders' ? (
                     <div className="p-6">
                         <div className="mb-6 flex justify-between items-end">
