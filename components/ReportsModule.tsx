@@ -28,6 +28,7 @@ export const ReportsModule: React.FC = () => {
     
     // Finance Report State
     const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [ordersMap, setOrdersMap] = useState<Record<string, Order>>({});
     const [financeFilter, setFinanceFilter] = useState<'all' | 'paid' | 'receivable'>('all');
     const [loadingFinance, setLoadingFinance] = useState(false);
 
@@ -35,8 +36,11 @@ export const ReportsModule: React.FC = () => {
         setLoadingOrders(true);
         try {
             const allOrders = await getAllOrders();
-            // Filter by date
+            // Filter by date and EXCLUDE quotes
             const filtered = allOrders.filter(o => {
+                const isQuote = o.currentStatus === OrderStatus.ORCAMENTO;
+                if (isQuote) return false;
+                
                 const orderDate = parseDateToComparable(o.orderDate);
                 return orderDate >= dateStart && orderDate <= dateEnd;
             });
@@ -51,8 +55,25 @@ export const ReportsModule: React.FC = () => {
     const fetchFinanceReport = async () => {
         setLoadingFinance(true);
         try {
-            const trans = await getTransactions(dateStart, dateEnd);
-            setTransactions(trans);
+            const [trans, allOrders] = await Promise.all([
+                getTransactions(dateStart, dateEnd),
+                getAllOrders()
+            ]);
+            
+            // Create map for easy lookup
+            const map: Record<string, Order> = {};
+            allOrders.forEach(o => { map[o.id] = o; });
+            setOrdersMap(map);
+
+            // Filter transactions: if linked to an order, it must NOT be a quote
+            const filteredTrans = trans.filter(t => {
+                if (t.orderId && map[t.orderId]) {
+                    return map[t.orderId].currentStatus !== OrderStatus.ORCAMENTO;
+                }
+                return true; // Keep expenses or unlinked transactions
+            });
+
+            setTransactions(filteredTrans);
         } catch (err) {
             console.error("Error fetching finance report:", err);
         } finally {
@@ -244,32 +265,46 @@ export const ReportsModule: React.FC = () => {
                                 <thead className="bg-gray-50">
                                     <tr>
                                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Data</th>
-                                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Descrição</th>
+                                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Pedido #</th>
+                                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Nome / Contato</th>
                                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tipo / Status</th>
                                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Valor</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
                                     {loadingFinance ? (
-                                        <tr><td colSpan={4} className="p-8 text-center text-gray-400">Carregando...</td></tr>
+                                        <tr><td colSpan={5} className="p-8 text-center text-gray-400">Carregando...</td></tr>
                                     ) : (
                                         <>
                                             {/* Render Transactions (Pagos/Despesas) */}
-                                            {(financeFilter === 'all' || financeFilter === 'paid') && transactions.map(t => (
-                                                <tr key={t.id} className="hover:bg-gray-50 transition">
-                                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{t.date}</td>
-                                                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{t.description}</td>
-                                                    <td className="px-4 py-4 whitespace-nowrap">
-                                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${t.type === 'revenue' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                            {t.type === 'revenue' ? <ArrowUpRight size={12} /> : <ArrowDownLeft size={12} />}
-                                                            {t.type === 'revenue' ? 'Receita (Pago)' : 'Despesa'}
-                                                        </span>
-                                                    </td>
-                                                    <td className={`px-4 py-4 whitespace-nowrap text-right text-sm font-bold ${t.type === 'revenue' ? 'text-green-600' : 'text-red-600'}`}>
-                                                        {t.type === 'revenue' ? '+' : '-'}{formatCurrency(t.amount)}
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                            {(financeFilter === 'all' || financeFilter === 'paid') && transactions.map(t => {
+                                                const linkedOrder = t.orderId ? ordersMap[t.orderId] : null;
+                                                return (
+                                                    <tr key={t.id} className="hover:bg-gray-50 transition">
+                                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{t.date}</td>
+                                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                            {t.orderId ? `#${t.orderId}` : '-'}
+                                                        </td>
+                                                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                            {linkedOrder ? (
+                                                                <div>
+                                                                    <div>{linkedOrder.customerName}</div>
+                                                                    <div className="text-xs text-gray-500 font-normal">{linkedOrder.customerPhone}</div>
+                                                                </div>
+                                                            ) : t.description}
+                                                        </td>
+                                                        <td className="px-4 py-4 whitespace-nowrap">
+                                                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${t.type === 'revenue' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                {t.type === 'revenue' ? <ArrowUpRight size={12} /> : <ArrowDownLeft size={12} />}
+                                                                {t.type === 'revenue' ? 'Receita (Pago)' : 'Despesa'}
+                                                            </span>
+                                                        </td>
+                                                        <td className={`px-4 py-4 whitespace-nowrap text-right text-sm font-bold ${t.type === 'revenue' ? 'text-green-600' : 'text-red-600'}`}>
+                                                            {t.type === 'revenue' ? '+' : '-'}{formatCurrency(t.amount)}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
 
                                             {/* Render Receivables (A Receber) */}
                                             {(financeFilter === 'all' || financeFilter === 'receivable') && (
@@ -304,6 +339,9 @@ const ReceivablesList: React.FC<{ dateStart: string, dateEnd: string, formatCurr
         const fetch = async () => {
             const all = await getAllOrders();
             const filtered = all.filter(o => {
+                const isQuote = o.currentStatus === OrderStatus.ORCAMENTO;
+                if (isQuote) return false;
+
                 const balance = o.total - o.downPayment;
                 // Filter by delivery date for receivables
                 const compareDate = parseDateToComparable(o.estimatedDelivery); 
@@ -319,7 +357,11 @@ const ReceivablesList: React.FC<{ dateStart: string, dateEnd: string, formatCurr
             {receivables.map(o => (
                 <tr key={`rec-${o.id}`} className="hover:bg-gray-50 transition bg-blue-50/30">
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{formatDate(o.estimatedDelivery)}</td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Saldo Pedido #{o.id} - {o.customerName}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">#{o.id}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <div>{o.customerName}</div>
+                        <div className="text-xs text-gray-500 font-normal">{o.customerPhone}</div>
+                    </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                             <DollarSign size={12} />
