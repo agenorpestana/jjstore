@@ -996,7 +996,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   return (
     <div className="min-h-screen bg-gray-50 pb-12">
       {/* Top Bar */}
-      <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
+      <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30 no-print">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
           <div className="flex items-center gap-3">
              <div className="flex items-center gap-2">
@@ -1022,7 +1022,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
       {/* Subscription Alert Banner */}
       {daysRemaining !== null && daysRemaining <= 3 && daysRemaining >= 0 && (
-          <div className="bg-orange-50 border-b border-orange-100 p-3">
+          <div className="bg-orange-50 border-b border-orange-100 p-3 no-print">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-orange-800 text-sm font-medium">
                       <AlertTriangle size={18} />
@@ -1041,7 +1041,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Tabs & Actions */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 no-print">
             <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm flex-wrap">
                 {isAdmin && (
                     <button 

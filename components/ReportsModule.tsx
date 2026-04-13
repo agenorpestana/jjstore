@@ -108,7 +108,7 @@ export const ReportsModule: React.FC = () => {
     return (
         <div className="space-y-6">
             {/* Header & Type Selector */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm no-print">
                 <div className="flex bg-gray-100 p-1 rounded-lg">
                     <button 
                         onClick={() => setReportType('orders')}
@@ -323,35 +323,43 @@ export const ReportsModule: React.FC = () => {
             <style dangerouslySetInnerHTML={{ __html: `
                 @media print {
                     @page {
-                        margin: 0.5cm;
+                        margin: 1cm;
                         size: portrait;
                     }
                     body {
-                        background: white;
-                        font-size: 10pt;
+                        background: white !important;
+                        color: black !important;
                     }
-                    body * { visibility: hidden; }
-                    .print-section, .print-section * { visibility: visible; }
+                    .no-print { 
+                        display: none !important; 
+                    }
                     .print-section { 
-                        position: absolute; 
-                        left: 0; 
-                        top: 0; 
-                        width: 100%; 
-                        padding: 0 !important;
+                        display: block !important;
+                        position: static !important;
+                        width: 100% !important;
                         margin: 0 !important;
+                        padding: 0 !important;
                         border: none !important;
                         box-shadow: none !important;
                     }
-                    .print-section table {
+                    /* Reset container constraints for print */
+                    .max-w-7xl, .mx-auto, .px-4, .sm\\:px-6, .lg\\:px-8, .py-8 {
+                        max-width: none !important;
                         width: 100% !important;
-                        table-layout: auto !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
                     }
-                    .print-section th, .print-section td {
-                        padding: 4px 2px !important;
+                    table {
+                        width: 100% !important;
+                        border-collapse: collapse !important;
                     }
-                    button, .no-print, .shadow-sm, .rounded-xl { display: none !important; }
-                    .bg-white { background-color: white !important; }
+                    th, td {
+                        border-bottom: 1px solid #eee !important;
+                    }
                     .bg-gray-50 { background-color: #f9fafb !important; }
+                    .text-primary { color: #2563eb !important; }
+                    .text-green-600 { color: #16a34a !important; }
+                    .text-red-600 { color: #dc2626 !important; }
                 }
             `}} />
         </div>
