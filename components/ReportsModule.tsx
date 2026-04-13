@@ -251,13 +251,13 @@ export const ReportsModule: React.FC = () => {
                                         </td>
                                         <td></td>
                                         <td className="px-2 py-2 text-right text-xs text-green-700">
-                                            {formatCurrency(orders.reduce((acc, o) => acc + o.downPayment, 0))}
+                                            {formatCurrency(orders.reduce((acc, o) => acc + Number(o.downPayment), 0))}
                                         </td>
                                         <td className="px-2 py-2 text-right text-xs text-red-700">
-                                            {formatCurrency(orders.reduce((acc, o) => acc + (o.total - o.downPayment), 0))}
+                                            {formatCurrency(orders.reduce((acc, o) => acc + (Number(o.total) - Number(o.downPayment)), 0))}
                                         </td>
                                         <td className="px-2 py-2 text-right text-xs text-gray-900">
-                                            {formatCurrency(orders.reduce((acc, o) => acc + o.total, 0))}
+                                            {formatCurrency(orders.reduce((acc, o) => acc + Number(o.total), 0))}
                                         </td>
                                     </tr>
                                 </tfoot>
@@ -394,7 +394,7 @@ export const ReportsModule: React.FC = () => {
                                                 <tr className="text-green-700">
                                                     <td colSpan={4} className="px-2 py-2 text-right text-[10px] uppercase">Total Receitas (Pagos):</td>
                                                     <td className="px-2 py-2 text-right text-xs">
-                                                        {formatCurrency(transactions.filter(t => t.type === 'revenue').reduce((acc, t) => acc + t.amount, 0))}
+                                                        {formatCurrency(transactions.filter(t => t.type === 'revenue').reduce((acc, t) => acc + Number(t.amount), 0))}
                                                     </td>
                                                 </tr>
                                             )}
@@ -403,7 +403,7 @@ export const ReportsModule: React.FC = () => {
                                                 <tr className="text-red-700">
                                                     <td colSpan={4} className="px-2 py-2 text-right text-[10px] uppercase">Total Despesas:</td>
                                                     <td className="px-2 py-2 text-right text-xs">
-                                                        {formatCurrency(transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0))}
+                                                        {formatCurrency(transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0))}
                                                     </td>
                                                 </tr>
                                             )}
@@ -413,8 +413,8 @@ export const ReportsModule: React.FC = () => {
                                                     <td colSpan={4} className="px-2 py-2 text-right text-[10px] uppercase">Saldo (Receitas - Despesas):</td>
                                                     <td className="px-2 py-2 text-right text-xs">
                                                         {formatCurrency(
-                                                            transactions.filter(t => t.type === 'revenue').reduce((acc, t) => acc + t.amount, 0) - 
-                                                            transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0)
+                                                            transactions.filter(t => t.type === 'revenue').reduce((acc, t) => acc + Number(t.amount), 0) - 
+                                                            transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0)
                                                         )}
                                                     </td>
                                                 </tr>
@@ -496,7 +496,7 @@ const ReceivablesList: React.FC<{ dateStart: string, dateEnd: string, formatCurr
             });
             setReceivables(filtered);
             if (onTotalChange) {
-                const total = filtered.reduce((acc, o) => acc + (o.total - o.downPayment), 0);
+                const total = filtered.reduce((acc, o) => acc + (Number(o.total) - Number(o.downPayment)), 0);
                 onTotalChange(total);
             }
         };
@@ -541,7 +541,7 @@ const ReceivableFooter: React.FC<{ dateStart: string, dateEnd: string, formatCur
                 const compareDate = parseDateToComparable(o.estimatedDelivery); 
                 return balance > 0 && compareDate >= dateStart && compareDate <= dateEnd;
             });
-            setTotal(filtered.reduce((acc, o) => acc + (o.total - o.downPayment), 0));
+            setTotal(filtered.reduce((acc, o) => acc + (Number(o.total) - Number(o.downPayment)), 0));
         };
         fetch();
     }, [dateStart, dateEnd]);
