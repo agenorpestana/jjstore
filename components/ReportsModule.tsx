@@ -25,11 +25,13 @@ export const ReportsModule: React.FC = () => {
     // Orders Report State
     const [orders, setOrders] = useState<Order[]>([]);
     const [loadingOrders, setLoadingOrders] = useState(false);
+    const [selectedStatuses, setSelectedStatuses] = useState<OrderStatus[]>([]);
     
     // Finance Report State
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [ordersMap, setOrdersMap] = useState<Record<string, Order>>({});
     const [financeFilter, setFinanceFilter] = useState<'all' | 'paid' | 'receivable'>('all');
+    const [paidSubFilter, setPaidSubFilter] = useState<'all' | 'expenses' | 'orders'>('all');
     const [loadingFinance, setLoadingFinance] = useState(false);
 
     const fetchOrdersReport = async () => {
@@ -41,6 +43,11 @@ export const ReportsModule: React.FC = () => {
                 const isQuote = o.currentStatus === OrderStatus.ORCAMENTO;
                 if (isQuote) return false;
                 
+                // Filter by status if any selected
+                if (selectedStatuses.length > 0 && !selectedStatuses.includes(o.currentStatus)) {
+                    return false;
+                }
+
                 const orderDate = parseDateToComparable(o.orderDate);
                 return orderDate >= dateStart && orderDate <= dateEnd;
             });
@@ -84,7 +91,13 @@ export const ReportsModule: React.FC = () => {
     useEffect(() => {
         if (reportType === 'orders') fetchOrdersReport();
         else fetchFinanceReport();
-    }, [reportType, dateStart, dateEnd, financeFilter]);
+    }, [reportType, dateStart, dateEnd, financeFilter, selectedStatuses]);
+
+    const toggleStatus = (status: OrderStatus) => {
+        setSelectedStatuses(prev => 
+            prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status]
+        );
+    };
 
     const handlePrint = () => {
         window.print();
@@ -155,10 +168,30 @@ export const ReportsModule: React.FC = () => {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden print:border-none print:shadow-none print-section">
                 {reportType === 'orders' ? (
                     <div className="p-6">
-                        <div className="mb-6 flex justify-between items-end">
+                        <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                             <div>
                                 <h2 className="text-xl font-bold text-gray-800">Relatório de Pedidos por Período</h2>
                                 <p className="text-sm text-gray-500">Período: {formatDate(dateStart)} a {formatDate(dateEnd)}</p>
+                                
+                                {/* Status Filter */}
+                                <div className="mt-4 no-print">
+                                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Filtrar por Status:</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {Object.values(OrderStatus).filter(s => s !== OrderStatus.ORCAMENTO).map(status => (
+                                            <button
+                                                key={status}
+                                                onClick={() => toggleStatus(status)}
+                                                className={`px-2 py-1 rounded text-[10px] font-medium border transition ${
+                                                    selectedStatuses.includes(status)
+                                                        ? 'bg-primary text-white border-primary'
+                                                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                {status}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                             <div className="text-right">
                                 <p className="text-sm font-medium text-gray-600">Total de Pedidos: {orders.length}</p>
@@ -238,25 +271,50 @@ export const ReportsModule: React.FC = () => {
                                 <h2 className="text-xl font-bold text-gray-800">Relatório Financeiro</h2>
                                 <p className="text-sm text-gray-500">Período: {formatDate(dateStart)} a {formatDate(dateEnd)}</p>
                             </div>
-                            <div className="flex bg-gray-100 p-1 rounded-lg">
-                                <button 
-                                    onClick={() => setFinanceFilter('all')}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${financeFilter === 'all' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                >
-                                    Todos
-                                </button>
-                                <button 
-                                    onClick={() => setFinanceFilter('paid')}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${financeFilter === 'paid' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                >
-                                    Pagos (Receitas)
-                                </button>
-                                <button 
-                                    onClick={() => setFinanceFilter('receivable')}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${financeFilter === 'receivable' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                >
-                                    A Receber
-                                </button>
+                            <div className="flex flex-col gap-3 items-end">
+                                <div className="flex bg-gray-100 p-1 rounded-lg no-print">
+                                    <button 
+                                        onClick={() => setFinanceFilter('all')}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${financeFilter === 'all' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        Todos
+                                    </button>
+                                    <button 
+                                        onClick={() => setFinanceFilter('paid')}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${financeFilter === 'paid' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        Pagos (Receitas)
+                                    </button>
+                                    <button 
+                                        onClick={() => setFinanceFilter('receivable')}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${financeFilter === 'receivable' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        A Receber
+                                    </button>
+                                </div>
+
+                                {financeFilter === 'paid' && (
+                                    <div className="flex bg-gray-50 p-1 rounded-lg border border-gray-200 no-print">
+                                        <button 
+                                            onClick={() => setPaidSubFilter('all')}
+                                            className={`px-2 py-1 rounded text-[10px] font-medium transition ${paidSubFilter === 'all' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                            Todos Pagos
+                                        </button>
+                                        <button 
+                                            onClick={() => setPaidSubFilter('expenses')}
+                                            className={`px-2 py-1 rounded text-[10px] font-medium transition ${paidSubFilter === 'expenses' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                            Despesas
+                                        </button>
+                                        <button 
+                                            onClick={() => setPaidSubFilter('orders')}
+                                            className={`px-2 py-1 rounded text-[10px] font-medium transition ${paidSubFilter === 'orders' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                            Pedidos
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -277,42 +335,97 @@ export const ReportsModule: React.FC = () => {
                                     ) : (
                                         <>
                                             {/* Render Transactions (Pagos/Despesas) */}
-                                            {(financeFilter === 'all' || financeFilter === 'paid') && transactions.map(t => {
-                                                const linkedOrder = t.orderId ? ordersMap[t.orderId] : null;
-                                                return (
-                                                    <tr key={t.id} className="hover:bg-gray-50 transition">
-                                                        <td className="px-2 py-2 text-xs text-gray-600">{t.date}</td>
-                                                        <td className="px-2 py-2 text-xs text-gray-600">
-                                                            {t.orderId ? `#${t.orderId}` : '-'}
-                                                        </td>
-                                                        <td className="px-2 py-2">
-                                                            {linkedOrder ? (
-                                                                <div>
-                                                                    <div className="text-xs font-bold text-gray-900 leading-tight">{linkedOrder.customerName}</div>
-                                                                    <div className="text-[10px] text-gray-500 font-normal">{linkedOrder.customerPhone}</div>
-                                                                </div>
-                                                            ) : <div className="text-xs font-medium text-gray-900">{t.description}</div>}
-                                                        </td>
-                                                        <td className="px-2 py-2">
-                                                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${t.type === 'revenue' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                                {t.type === 'revenue' ? <ArrowUpRight size={10} /> : <ArrowDownLeft size={10} />}
-                                                                {t.type === 'revenue' ? 'Receita' : 'Despesa'}
-                                                            </span>
-                                                        </td>
-                                                        <td className={`px-2 py-2 text-right text-xs font-bold ${t.type === 'revenue' ? 'text-green-600' : 'text-red-600'}`}>
-                                                            {t.type === 'revenue' ? '+' : '-'}{formatCurrency(t.amount)}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
+                                            {(financeFilter === 'all' || financeFilter === 'paid') && transactions
+                                                .filter(t => {
+                                                    if (financeFilter === 'paid') {
+                                                        if (paidSubFilter === 'expenses') return t.type === 'expense';
+                                                        if (paidSubFilter === 'orders') return t.type === 'revenue';
+                                                    }
+                                                    return true;
+                                                })
+                                                .map(t => {
+                                                    const linkedOrder = t.orderId ? ordersMap[t.orderId] : null;
+                                                    return (
+                                                        <tr key={t.id} className="hover:bg-gray-50 transition">
+                                                            <td className="px-2 py-2 text-xs text-gray-600">{t.date}</td>
+                                                            <td className="px-2 py-2 text-xs text-gray-600">
+                                                                {t.orderId ? `#${t.orderId}` : '-'}
+                                                            </td>
+                                                            <td className="px-2 py-2">
+                                                                {linkedOrder ? (
+                                                                    <div>
+                                                                        <div className="text-xs font-bold text-gray-900 leading-tight">{linkedOrder.customerName}</div>
+                                                                        <div className="text-[10px] text-gray-500 font-normal">{linkedOrder.customerPhone}</div>
+                                                                    </div>
+                                                                ) : <div className="text-xs font-medium text-gray-900">{t.description}</div>}
+                                                            </td>
+                                                            <td className="px-2 py-2">
+                                                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${t.type === 'revenue' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                    {t.type === 'revenue' ? <ArrowUpRight size={10} /> : <ArrowDownLeft size={10} />}
+                                                                    {t.type === 'revenue' ? 'Receita' : 'Despesa'}
+                                                                </span>
+                                                            </td>
+                                                            <td className={`px-2 py-2 text-right text-xs font-bold ${t.type === 'revenue' ? 'text-green-600' : 'text-red-600'}`}>
+                                                                {t.type === 'revenue' ? '+' : '-'}{formatCurrency(t.amount)}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
 
                                             {/* Render Receivables (A Receber) */}
                                             {(financeFilter === 'all' || financeFilter === 'receivable') && (
-                                                <ReceivablesList dateStart={dateStart} dateEnd={dateEnd} formatCurrency={formatCurrency} formatDate={formatDate} />
+                                                <ReceivablesList 
+                                                    dateStart={dateStart} 
+                                                    dateEnd={dateEnd} 
+                                                    formatCurrency={formatCurrency} 
+                                                    formatDate={formatDate} 
+                                                    onTotalChange={() => {}} // Not needed here as we calculate in footer
+                                                />
                                             )}
                                         </>
                                     )}
                                 </tbody>
+                                <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
+                                    {/* Paid Totals */}
+                                    {(financeFilter === 'all' || financeFilter === 'paid') && (
+                                        <>
+                                            {/* Revenue Row */}
+                                            {(paidSubFilter === 'all' || paidSubFilter === 'orders') && (
+                                                <tr className="text-green-700">
+                                                    <td colSpan={4} className="px-2 py-2 text-right text-[10px] uppercase">Total Receitas (Pagos):</td>
+                                                    <td className="px-2 py-2 text-right text-xs">
+                                                        {formatCurrency(transactions.filter(t => t.type === 'revenue').reduce((acc, t) => acc + t.amount, 0))}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            {/* Expense Row */}
+                                            {(paidSubFilter === 'all' || paidSubFilter === 'expenses') && (
+                                                <tr className="text-red-700">
+                                                    <td colSpan={4} className="px-2 py-2 text-right text-[10px] uppercase">Total Despesas:</td>
+                                                    <td className="px-2 py-2 text-right text-xs">
+                                                        {formatCurrency(transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0))}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            {/* Balance Row */}
+                                            {paidSubFilter === 'all' && (
+                                                <tr className="bg-gray-100">
+                                                    <td colSpan={4} className="px-2 py-2 text-right text-[10px] uppercase">Saldo (Receitas - Despesas):</td>
+                                                    <td className="px-2 py-2 text-right text-xs">
+                                                        {formatCurrency(
+                                                            transactions.filter(t => t.type === 'revenue').reduce((acc, t) => acc + t.amount, 0) - 
+                                                            transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0)
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </>
+                                    )}
+                                    {/* Receivable Totals */}
+                                    {(financeFilter === 'all' || financeFilter === 'receivable') && (
+                                        <ReceivableFooter dateStart={dateStart} dateEnd={dateEnd} formatCurrency={formatCurrency} />
+                                    )}
+                                </tfoot>
                             </table>
                         </div>
                     </div>
@@ -366,7 +479,7 @@ export const ReportsModule: React.FC = () => {
     );
 };
 
-const ReceivablesList: React.FC<{ dateStart: string, dateEnd: string, formatCurrency: (v: number) => string, formatDate: (d: string) => string }> = ({ dateStart, dateEnd, formatCurrency, formatDate }) => {
+const ReceivablesList: React.FC<{ dateStart: string, dateEnd: string, formatCurrency: (v: number) => string, formatDate: (d: string) => string, onTotalChange?: (total: number) => void }> = ({ dateStart, dateEnd, formatCurrency, formatDate, onTotalChange }) => {
     const [receivables, setReceivables] = useState<Order[]>([]);
 
     useEffect(() => {
@@ -382,6 +495,10 @@ const ReceivablesList: React.FC<{ dateStart: string, dateEnd: string, formatCurr
                 return balance > 0 && compareDate >= dateStart && compareDate <= dateEnd;
             });
             setReceivables(filtered);
+            if (onTotalChange) {
+                const total = filtered.reduce((acc, o) => acc + (o.total - o.downPayment), 0);
+                onTotalChange(total);
+            }
         };
         fetch();
     }, [dateStart, dateEnd]);
@@ -408,5 +525,33 @@ const ReceivablesList: React.FC<{ dateStart: string, dateEnd: string, formatCurr
                 </tr>
             ))}
         </>
+    );
+};
+
+const ReceivableFooter: React.FC<{ dateStart: string, dateEnd: string, formatCurrency: (v: number) => string }> = ({ dateStart, dateEnd, formatCurrency }) => {
+    const [total, setTotal] = useState(0);
+
+    useEffect(() => {
+        const fetch = async () => {
+            const all = await getAllOrders();
+            const filtered = all.filter(o => {
+                const isQuote = o.currentStatus === OrderStatus.ORCAMENTO;
+                if (isQuote) return false;
+                const balance = o.total - o.downPayment;
+                const compareDate = parseDateToComparable(o.estimatedDelivery); 
+                return balance > 0 && compareDate >= dateStart && compareDate <= dateEnd;
+            });
+            setTotal(filtered.reduce((acc, o) => acc + (o.total - o.downPayment), 0));
+        };
+        fetch();
+    }, [dateStart, dateEnd]);
+
+    return (
+        <tr className="bg-blue-50 text-blue-800">
+            <td colSpan={4} className="px-2 py-2 text-right text-[10px] uppercase font-bold">Total a Receber:</td>
+            <td className="px-2 py-2 text-right text-xs font-bold">
+                {formatCurrency(total)}
+            </td>
+        </tr>
     );
 };
