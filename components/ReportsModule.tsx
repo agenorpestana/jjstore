@@ -15,6 +15,7 @@ const parseDateToComparable = (dateStr?: string) => {
 
 export const ReportsModule: React.FC = () => {
     const [reportType, setReportType] = useState<'orders' | 'finance'>('orders');
+    const [dateFilterType, setDateFilterType] = useState<'orderDate' | 'deliveryDate'>('orderDate');
     const [dateStart, setDateStart] = useState(() => {
         const d = new Date();
         d.setDate(d.getDate() - 30);
@@ -48,8 +49,9 @@ export const ReportsModule: React.FC = () => {
                     return false;
                 }
 
-                const orderDate = parseDateToComparable(o.orderDate);
-                return orderDate >= dateStart && orderDate <= dateEnd;
+                const targetDate = dateFilterType === 'orderDate' ? o.orderDate : o.estimatedDelivery;
+                const compareDate = parseDateToComparable(targetDate);
+                return compareDate >= dateStart && compareDate <= dateEnd;
             });
             setOrders(filtered);
         } catch (err) {
@@ -91,7 +93,7 @@ export const ReportsModule: React.FC = () => {
     useEffect(() => {
         if (reportType === 'orders') fetchOrdersReport();
         else fetchFinanceReport();
-    }, [reportType, dateStart, dateEnd, financeFilter, selectedStatuses]);
+    }, [reportType, dateStart, dateEnd, financeFilter, selectedStatuses, dateFilterType]);
 
     const toggleStatus = (status: OrderStatus) => {
         setSelectedStatuses(prev => 
@@ -138,6 +140,31 @@ export const ReportsModule: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
+                    {reportType === 'orders' && (
+                        <div className="flex items-center gap-4 mr-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input 
+                                    type="radio" 
+                                    name="dateFilterType" 
+                                    className="w-4 h-4 text-primary focus:ring-primary"
+                                    checked={dateFilterType === 'orderDate'}
+                                    onChange={() => setDateFilterType('orderDate')}
+                                />
+                                <span className="text-xs font-medium text-gray-700">Dt. Pedido</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input 
+                                    type="radio" 
+                                    name="dateFilterType" 
+                                    className="w-4 h-4 text-primary focus:ring-primary"
+                                    checked={dateFilterType === 'deliveryDate'}
+                                    onChange={() => setDateFilterType('deliveryDate')}
+                                />
+                                <span className="text-xs font-medium text-gray-700">Dt. Entrega</span>
+                            </label>
+                        </div>
+                    )}
+
                     <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
                         <Calendar size={16} className="text-gray-400" />
                         <input 
@@ -171,7 +198,10 @@ export const ReportsModule: React.FC = () => {
                         <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                             <div>
                                 <h2 className="text-xl font-bold text-gray-800">Relatório de Pedidos por Período</h2>
-                                <p className="text-sm text-gray-500">Período: {formatDate(dateStart)} a {formatDate(dateEnd)}</p>
+                                <p className="text-sm text-gray-500">
+                                    Filtrado por: <span className="font-semibold">{dateFilterType === 'orderDate' ? 'Data do Pedido' : 'Data de Entrega'}</span> | 
+                                    Período: {formatDate(dateStart)} a {formatDate(dateEnd)}
+                                </p>
                                 
                                 {/* Status Filter */}
                                 <div className="mt-4 no-print">
