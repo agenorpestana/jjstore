@@ -246,6 +246,7 @@ export const ReportsModule: React.FC = () => {
                                 <thead className="bg-gray-50">
                                     <tr>
                                         <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Cliente / Tel</th>
+                                        <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Itens</th>
                                         <th className="px-2 py-2 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider">Peças</th>
                                         <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Datas (Ped/Ent)</th>
                                         <th className="px-2 py-2 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">Valor Pago</th>
@@ -255,15 +256,31 @@ export const ReportsModule: React.FC = () => {
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
                                     {loadingOrders ? (
-                                        <tr><td colSpan={6} className="p-4 text-center text-gray-400 text-xs">Carregando...</td></tr>
+                                        <tr><td colSpan={7} className="p-4 text-center text-gray-400 text-xs">Carregando...</td></tr>
                                     ) : orders.length === 0 ? (
-                                        <tr><td colSpan={6} className="p-4 text-center text-gray-400 text-xs">Nenhum pedido encontrado no período.</td></tr>
+                                        <tr><td colSpan={7} className="p-4 text-center text-gray-400 text-xs">Nenhum pedido encontrado no período.</td></tr>
                                     ) : (
                                         orders.map(order => (
                                             <tr key={order.id} className="hover:bg-gray-50 transition">
                                                 <td className="px-2 py-2">
                                                     <div className="text-xs font-bold text-gray-900 leading-tight">{order.customerName}</div>
                                                     <div className="text-[10px] text-gray-500">{order.customerPhone}</div>
+                                                </td>
+                                                <td className="px-2 py-2 min-w-[120px]">
+                                                    <div className="space-y-1">
+                                                        {order.items.map((item, idx) => (
+                                                            <div key={idx} className="text-[10px] text-gray-700 leading-tight">
+                                                                <span className="font-bold">{item.quantity}x</span> {item.name} {item.size && `(${item.size})`}
+                                                                {item.isSet && item.subItems && item.subItems.length > 0 && (
+                                                                    <div className="pl-2 border-l border-purple-200 text-purple-600 text-[9px] mt-0.5">
+                                                                        {item.subItems.map((sub, sIdx) => (
+                                                                            <span key={sIdx}>{sub.name}: {sub.size}{sIdx < item.subItems!.length - 1 ? ', ' : ''}</span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </td>
                                                 <td className="px-2 py-2 text-center text-xs text-gray-600">
                                                     {order.items.reduce((acc, i) => acc + i.quantity, 0)}
@@ -288,6 +305,7 @@ export const ReportsModule: React.FC = () => {
                                 <tfoot className="bg-gray-50 font-bold">
                                     <tr>
                                         <td className="px-2 py-2 text-xs text-gray-900">TOTAIS</td>
+                                        <td></td>
                                         <td className="px-2 py-2 text-center text-xs text-gray-900">
                                             {orders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + i.quantity, 0), 0)}
                                         </td>

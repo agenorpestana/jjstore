@@ -306,7 +306,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   });
   
   // Item Editing State
-  const [tempItem, setTempItem] = useState({ name: '', size: '', price: '', quantity: '1' });
+  const [tempItem, setTempItem] = useState<{
+    name: string;
+    size: string;
+    price: string;
+    quantity: string;
+    isSet: boolean;
+    subItems: { name: string; size: string }[];
+  }>({ name: '', size: '', price: '', quantity: '1', isSet: false, subItems: [] });
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
 
   const resetOrderForm = () => {
@@ -319,7 +326,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         quoteValidity: '', notes: '',
         discount: 0, discountType: 'fixed'
     });
-    setTempItem({ name: '', size: '', price: '', quantity: '1' });
+    setTempItem({ name: '', size: '', price: '', quantity: '1', isSet: false, subItems: [] });
     setEditingItemIndex(null);
     setIsEditingFullOrder(null);
     setIsSubmitting(false);
@@ -366,7 +373,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           pressingDate: fullOrder.pressingDate || '',
           printingDate: fullOrder.printingDate || '',
           seamstress: fullOrder.seamstress || '',
-          items: fullOrder.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity })),
+          items: fullOrder.items.map(i => ({ 
+              name: i.name, 
+              size: i.size, 
+              price: i.price, 
+              quantity: i.quantity,
+              isSet: i.isSet,
+              subItems: i.subItems
+          })),
           isQuote: fullOrder.currentStatus === OrderStatus.ORCAMENTO,
           quoteValidity: fullOrder.quoteValidity || '',
           notes: fullOrder.notes || '',
@@ -421,7 +435,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         name: tempItem.name, 
         size: tempItem.size, 
         price: Number(tempItem.price), 
-        quantity: Number(tempItem.quantity) 
+        quantity: Number(tempItem.quantity),
+        isSet: tempItem.isSet,
+        subItems: tempItem.isSet ? tempItem.subItems : undefined
     };
 
     setOrderForm(prev => {
@@ -437,7 +453,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     });
 
     // Reset input states
-    setTempItem({ name: '', size: '', price: '', quantity: '1' });
+    setTempItem({ name: '', size: '', price: '', quantity: '1', isSet: false, subItems: [] });
     setEditingItemIndex(null);
   };
 
@@ -447,13 +463,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           name: itemToEdit.name,
           size: itemToEdit.size || '',
           price: itemToEdit.price.toString(),
-          quantity: itemToEdit.quantity.toString()
+          quantity: itemToEdit.quantity.toString(),
+          isSet: !!itemToEdit.isSet,
+          subItems: itemToEdit.subItems || []
       });
       setEditingItemIndex(index);
   }
 
   const handleCancelEditItem = () => {
-      setTempItem({ name: '', size: '', price: '', quantity: '1' });
+      setTempItem({ name: '', size: '', price: '', quantity: '1', isSet: false, subItems: [] });
       setEditingItemIndex(null);
   }
 
@@ -1948,75 +1966,162 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
               <div className="border-t border-gray-100 pt-4">
                 <label className="block text-sm font-medium text-gray-900 mb-3">Produtos <span className="text-red-500">*</span></label>
-                <div className="flex gap-2 mb-2">
-                  <input 
-                    type="text" 
-                    placeholder="Nome do produto" 
-                    className="flex-1 border border-gray-300 rounded-lg p-2.5 text-sm"
-                    value={tempItem.name}
-                    onChange={e => setTempItem({...tempItem, name: e.target.value})}
-                  />
-                  <input 
-                    type="text" 
-                    placeholder="Tam" 
-                    className="w-28 border border-gray-300 rounded-lg p-2.5 text-sm"
-                    value={tempItem.size}
-                    onChange={e => setTempItem({...tempItem, size: e.target.value})}
-                  />
-                  <input 
-                    type="number" 
-                    placeholder="R$" 
-                    className="w-24 border border-gray-300 rounded-lg p-2.5 text-sm"
-                    value={tempItem.price}
-                    onChange={e => setTempItem({...tempItem, price: e.target.value})}
-                  />
-                  <input 
-                    type="number" 
-                    placeholder="Qtd" 
-                    className="w-20 border border-gray-300 rounded-lg p-2.5 text-sm"
-                    value={tempItem.quantity}
-                    onChange={e => setTempItem({...tempItem, quantity: e.target.value})}
-                  />
-                  <div className="flex gap-1">
-                    <button 
-                        onClick={handleSaveItem}
-                        className={`p-2.5 rounded-lg text-white transition ${editingItemIndex !== null ? 'bg-green-500 hover:bg-green-600' : 'bg-blue-600 hover:bg-blue-700'}`}
-                        title={editingItemIndex !== null ? "Salvar Alteração" : "Adicionar Item"}
-                    >
-                        {editingItemIndex !== null ? <Check size={20} /> : <Plus size={20} />}
-                    </button>
+                
+                {/* Item Editor */}
+                <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Nome do produto" 
+                      className="flex-1 border border-gray-300 rounded-lg p-2.5 text-sm"
+                      value={tempItem.name}
+                      onChange={e => setTempItem({...tempItem, name: e.target.value})}
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Tamanho Geral" 
+                      className="w-28 border border-gray-300 rounded-lg p-2.5 text-sm"
+                      value={tempItem.size}
+                      onChange={e => setTempItem({...tempItem, size: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex gap-2">
+                        <input 
+                          type="number" 
+                          placeholder="R$" 
+                          className="w-24 border border-gray-300 rounded-lg p-2.5 text-sm"
+                          value={tempItem.price}
+                          onChange={e => setTempItem({...tempItem, price: e.target.value})}
+                        />
+                        <input 
+                          type="number" 
+                          placeholder="Qtd" 
+                          className="w-20 border border-gray-300 rounded-lg p-2.5 text-sm"
+                          value={tempItem.quantity}
+                          onChange={e => setTempItem({...tempItem, quantity: e.target.value})}
+                        />
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm hover:bg-gray-50 transition">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 text-primary rounded"
+                        checked={tempItem.isSet}
+                        onChange={e => setTempItem({...tempItem, isSet: e.target.checked})}
+                      />
+                      <span className="text-sm font-medium text-gray-700">Conjunto</span>
+                    </label>
+                  </div>
+
+                  {/* Sub-items list for Sets */}
+                  {tempItem.isSet && (
+                    <div className="mt-3 p-3 bg-white rounded-lg border border-gray-200">
+                      <p className="text-xs font-bold text-gray-500 uppercase mb-2">Peças do Conjunto</p>
+                      <div className="space-y-2">
+                        {tempItem.subItems.map((sub, sIdx) => (
+                          <div key={sIdx} className="flex items-center justify-between bg-gray-50 p-2 rounded text-xs">
+                            <span>{sub.name} - {sub.size}</span>
+                            <button 
+                              onClick={() => setTempItem(prev => ({...prev, subItems: prev.subItems.filter((_, si) => si !== sIdx)}))}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                        <div className="flex gap-1 mt-2">
+                          <input 
+                            type="text" 
+                            id="subItemName"
+                            placeholder="Ex: Camisa" 
+                            className="flex-1 border border-gray-200 rounded p-1.5 text-xs"
+                          />
+                          <input 
+                            type="text" 
+                            id="subItemSize"
+                            placeholder="Tam" 
+                            className="w-16 border border-gray-200 rounded p-1.5 text-xs"
+                          />
+                          <button 
+                            onClick={() => {
+                              const nameInput = document.getElementById('subItemName') as HTMLInputElement;
+                              const sizeInput = document.getElementById('subItemSize') as HTMLInputElement;
+                              if (nameInput.value) {
+                                setTempItem(prev => ({
+                                  ...prev, 
+                                  subItems: [...prev.subItems, { name: nameInput.value, size: sizeInput.value }]
+                                }));
+                                nameInput.value = '';
+                                sizeInput.value = '';
+                              }
+                            }}
+                            className="bg-primary text-white p-1.5 rounded"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                     {editingItemIndex !== null && (
                         <button 
                             onClick={handleCancelEditItem}
-                            className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2.5 rounded-lg"
-                            title="Cancelar Edição"
+                            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium"
                         >
-                            <X size={20} />
+                            Cancelar
                         </button>
                     )}
+                    <button 
+                        onClick={handleSaveItem}
+                        className={`px-6 py-2 rounded-lg text-white font-medium transition ${editingItemIndex !== null ? 'bg-green-500 hover:bg-green-600' : 'bg-primary hover:bg-blue-700'}`}
+                    >
+                        {editingItemIndex !== null ? 'Salvar Alteração' : 'Adicionar este Produto'}
+                    </button>
                   </div>
                 </div>
 
                 {/* Items List */}
-                <div className="bg-gray-50 rounded-lg p-3 space-y-2 max-h-32 overflow-y-auto">
-                  {orderForm.items.length === 0 && <p className="text-xs text-center text-gray-400">Nenhum item adicionado</p>}
+                <div className="bg-gray-100 rounded-xl p-4 space-y-3">
+                  {orderForm.items.length === 0 && <p className="text-sm text-center text-gray-400 py-4 italic">Nenhum produto adicionado ao pedido</p>}
                   {orderForm.items.map((item, idx) => (
-                    <div key={idx} className={`flex justify-between text-sm items-center bg-white p-2 rounded shadow-sm ${editingItemIndex === idx ? 'ring-2 ring-primary ring-offset-1' : ''}`}>
-                      <div className="flex items-center gap-2">
-                          <span className="text-gray-700">{item.quantity}x {item.name}</span>
-                          {item.size && <span className="bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded font-medium">{item.size}</span>}
+                    <div key={idx} className={`relative flex justify-between items-start bg-white p-4 rounded-xl shadow-sm border ${editingItemIndex === idx ? 'border-primary' : 'border-gray-200'}`}>
+                      <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-gray-900">{item.quantity}x {item.name}</span>
+                              {item.size && <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full font-bold">{item.size}</span>}
+                              {item.isSet && <span className="bg-purple-100 text-purple-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Conjunto</span>}
+                          </div>
+                          {item.isSet && item.subItems && item.subItems.length > 0 && (
+                            <div className="mt-2 pl-2 border-l-2 border-purple-100 flex flex-wrap gap-2">
+                                {item.subItems.map((sub, sIdx) => (
+                                    <span key={sIdx} className="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded">
+                                        {sub.name}: <strong>{sub.size}</strong>
+                                    </span>
+                                ))}
+                            </div>
+                          )}
+                          <div className="mt-1 text-xs text-blue-600 font-bold">
+                              R$ {(item.price * item.quantity).toFixed(2)}
+                          </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                          <span className="font-medium mr-2">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                      <div className="flex gap-1 ml-4 pt-1">
                           <button 
                             onClick={() => handleEditItem(idx)}
-                            className="text-blue-400 hover:text-blue-600 p-1 hover:bg-blue-50 rounded"
-                            title="Editar Item"
+                            className="bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition"
+                            title="Editar"
                           >
-                              <Edit2 size={14} />
+                              <Edit2 size={16} />
                           </button>
-                          <button onClick={() => handleRemoveItem(idx)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded">
-                              <X size={14} />
+                          <button 
+                            onClick={() => handleRemoveItem(idx)} 
+                            className="bg-red-50 text-red-600 p-2 rounded-lg hover:bg-red-100 transition"
+                            title="Remover"
+                          >
+                              <X size={16} />
                           </button>
                       </div>
                     </div>
@@ -2288,17 +2393,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                             <tbody className="divide-y divide-gray-200">
                                 {viewingOrder.items.map((item, idx) => (
                                     <tr key={idx} className="even:bg-white odd:bg-gray-50/50">
-                                        <td className="px-4 py-3 text-sm text-gray-900 flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded border border-gray-200 bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
-                                                {appSettings.logoUrl ? (
-                                                    <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-contain p-0.5" />
-                                                ) : (
-                                                    <ShoppingCart className="text-gray-400" size={16} />
-                                                )}
+                                        <td className="px-4 py-3 text-sm text-gray-900">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded border border-gray-200 bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+                                                    {appSettings.logoUrl ? (
+                                                        <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-contain p-0.5" />
+                                                    ) : (
+                                                        <ShoppingCart className="text-gray-400" size={16} />
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className="font-semibold">{item.name}</span>
+                                                        {item.isSet && <span className="bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0.5 rounded font-bold uppercase">Set</span>}
+                                                    </div>
+                                                    {item.isSet && item.subItems && item.subItems.length > 0 && (
+                                                        <div className="mt-1 flex flex-wrap gap-1">
+                                                            {item.subItems.map((sub, sIdx) => (
+                                                                <span key={sIdx} className="text-[10px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded border border-purple-100/50">
+                                                                    {sub.name}: {sub.size}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                            {item.name}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-center text-gray-600">{item.size || '-'}</td>
+                                        <td className="px-4 py-3 text-sm text-center text-gray-600 font-bold">{item.size || '-'}</td>
                                         <td className="px-4 py-3 text-sm text-center text-gray-600">{item.quantity}</td>
                                         <td className="px-4 py-3 text-sm text-right text-gray-600">
                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price)}

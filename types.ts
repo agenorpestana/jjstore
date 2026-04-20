@@ -8,6 +8,11 @@ export enum OrderStatus {
   CANCELADO = 'CANCELADO'
 }
 
+export interface OrderSubItem {
+  name: string;
+  size: string;
+}
+
 export interface OrderItem {
   id: string;
   name: string;
@@ -15,6 +20,8 @@ export interface OrderItem {
   quantity: number;
   price: number;
   image: string;
+  isSet?: boolean;
+  subItems?: OrderSubItem[];
 }
 
 export interface StatusEvent {

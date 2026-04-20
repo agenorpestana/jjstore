@@ -181,13 +181,25 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
                     </div>
 
                     <div className="flex-1">
-                        <h4 className="text-gray-900 font-medium">{item.name}</h4>
+                        <div className="flex items-center gap-2">
+                            <h4 className="text-gray-900 font-medium">{item.name}</h4>
+                            {item.isSet && <span className="bg-purple-100 text-purple-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Conjunto</span>}
+                        </div>
                         {item.size && (
-                             <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded">
+                             <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-semibold rounded">
                                 Tamanho: {item.size}
                              </span>
                         )}
-                        <p className="text-gray-500 text-sm mt-1">Qtd: {item.quantity}</p>
+                        {item.isSet && item.subItems && item.subItems.length > 0 && (
+                            <div className="mt-2 pl-3 border-l-2 border-purple-100 flex flex-wrap gap-2">
+                                {item.subItems.map((sub, sIdx) => (
+                                    <span key={sIdx} className="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded border border-purple-100/50">
+                                        {sub.name}: <strong>{sub.size}</strong>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                        <p className="text-gray-500 text-xs mt-1 font-medium">Quantidade: {item.quantity}</p>
                     </div>
                     <div className="text-right">
                         <p className="text-gray-900 font-semibold">
