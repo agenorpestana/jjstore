@@ -315,6 +315,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     subItems: { name: string; size: string }[];
   }>({ name: '', size: '', price: '', quantity: '1', isSet: false, subItems: [] });
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  const [newSubItem, setNewSubItem] = useState({ name: '', size: '' });
 
   const resetOrderForm = () => {
       setOrderForm({
@@ -327,6 +328,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         discount: 0, discountType: 'fixed'
     });
     setTempItem({ name: '', size: '', price: '', quantity: '1', isSet: false, subItems: [] });
+    setNewSubItem({ name: '', size: '' });
     setEditingItemIndex(null);
     setIsEditingFullOrder(null);
     setIsSubmitting(false);
@@ -417,7 +419,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           pressingDate: '',
           printingDate: '',
           seamstress: '',
-          items: fullOrder.items.map(i => ({ name: i.name, size: i.size, price: i.price, quantity: i.quantity })),
+          items: fullOrder.items.map(i => ({ 
+            name: i.name, 
+            size: i.size, 
+            price: i.price, 
+            quantity: i.quantity,
+            isSet: i.isSet,
+            subItems: i.subItems 
+          })),
           isQuote: fullOrder.currentStatus === OrderStatus.ORCAMENTO,
           quoteValidity: fullOrder.quoteValidity || '', // Mantém validade se for orçamento
           notes: fullOrder.notes || '',
@@ -454,6 +463,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
     // Reset input states
     setTempItem({ name: '', size: '', price: '', quantity: '1', isSet: false, subItems: [] });
+    setNewSubItem({ name: '', size: '' });
     setEditingItemIndex(null);
   };
 
@@ -472,6 +482,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
 
   const handleCancelEditItem = () => {
       setTempItem({ name: '', size: '', price: '', quantity: '1', isSet: false, subItems: [] });
+      setNewSubItem({ name: '', size: '' });
       setEditingItemIndex(null);
   }
 
@@ -2034,27 +2045,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                         <div className="flex gap-1 mt-2">
                           <input 
                             type="text" 
-                            id="subItemName"
                             placeholder="Ex: Camisa" 
                             className="flex-1 border border-gray-200 rounded p-1.5 text-xs"
+                            value={newSubItem.name}
+                            onChange={e => setNewSubItem({...newSubItem, name: e.target.value})}
                           />
                           <input 
                             type="text" 
-                            id="subItemSize"
                             placeholder="Tam" 
                             className="w-16 border border-gray-200 rounded p-1.5 text-xs"
+                            value={newSubItem.size}
+                            onChange={e => setNewSubItem({...newSubItem, size: e.target.value})}
                           />
                           <button 
+                            type="button"
                             onClick={() => {
-                              const nameInput = document.getElementById('subItemName') as HTMLInputElement;
-                              const sizeInput = document.getElementById('subItemSize') as HTMLInputElement;
-                              if (nameInput.value) {
+                              if (newSubItem.name) {
                                 setTempItem(prev => ({
                                   ...prev, 
-                                  subItems: [...prev.subItems, { name: nameInput.value, size: sizeInput.value }]
+                                  subItems: [...prev.subItems, { ...newSubItem }]
                                 }));
-                                nameInput.value = '';
-                                sizeInput.value = '';
+                                setNewSubItem({ name: '', size: '' });
                               }
                             }}
                             className="bg-primary text-white p-1.5 rounded"
