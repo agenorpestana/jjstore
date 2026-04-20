@@ -237,7 +237,12 @@ export const ReportsModule: React.FC = () => {
                             </div>
                             <div className="text-right">
                                 <p className="text-sm font-medium text-gray-600">Total de Pedidos: {orders.length}</p>
-                                <p className="text-sm font-medium text-gray-600">Total em Peças: {orders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + i.quantity, 0), 0)}</p>
+                                <p className="text-sm font-medium text-gray-600">Total em Peças: {orders.reduce((acc, o) => acc + o.items.reduce((sum, i) => {
+                                    if (i.isSet && i.subItems && i.subItems.length > 0) {
+                                        return sum + (i.quantity * i.subItems.length);
+                                    }
+                                    return sum + i.quantity;
+                                }, 0), 0)}</p>
                             </div>
                         </div>
 
@@ -283,7 +288,12 @@ export const ReportsModule: React.FC = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-2 py-2 text-center text-xs text-gray-600">
-                                                    {order.items.reduce((acc, i) => acc + i.quantity, 0)}
+                                                    {order.items.reduce((acc, i) => {
+                                                        if (i.isSet && i.subItems && i.subItems.length > 0) {
+                                                            return acc + (i.quantity * i.subItems.length);
+                                                        }
+                                                        return acc + i.quantity;
+                                                    }, 0)}
                                                 </td>
                                                 <td className="px-2 py-2">
                                                     <div className="text-[10px] text-gray-600 leading-tight">P: {formatDate(order.orderDate)}</div>

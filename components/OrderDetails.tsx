@@ -17,9 +17,17 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
       let totalItems = 0;
 
       order.items.forEach(item => {
-          const size = item.size ? item.size.toUpperCase().trim() : 'UN';
-          summary[size] = (summary[size] || 0) + item.quantity;
-          totalItems += item.quantity;
+          if (item.isSet && item.subItems && item.subItems.length > 0) {
+              item.subItems.forEach(sub => {
+                  const size = sub.size ? sub.size.toUpperCase().trim() : 'UN';
+                  summary[size] = (summary[size] || 0) + item.quantity;
+                  totalItems += item.quantity;
+              });
+          } else {
+              const size = item.size ? item.size.toUpperCase().trim() : 'UN';
+              summary[size] = (summary[size] || 0) + item.quantity;
+              totalItems += item.quantity;
+          }
       });
 
       return { summary, totalItems };
@@ -185,7 +193,7 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
                             <h4 className="text-gray-900 font-medium">{item.name}</h4>
                             {item.isSet && <span className="bg-purple-100 text-purple-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Conjunto</span>}
                         </div>
-                        {item.size && (
+                        {!item.isSet && item.size && (
                              <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-semibold rounded">
                                 Tamanho: {item.size}
                              </span>

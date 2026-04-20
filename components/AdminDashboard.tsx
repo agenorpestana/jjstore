@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Search, Truck, CheckCircle, Package, MapPin, X, Users, Briefcase, Trash2, Calendar, Phone, DollarSign, CreditCard, Eye, Edit2, Camera, Upload, Image as ImageIcon, Shirt, Scissors, ClipboardList, Printer, ChevronLeft, ChevronRight, Lock, Key, Shield, Settings, Save, AlertTriangle, AlertCircle, ShoppingCart, Copy, Check, FileText, ArrowRight, LayoutDashboard, Wallet } from 'lucide-react';
-import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, FinancialAccount } from '../types';
+import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, FinancialAccount, OrderItem } from '../types';
 import { getAllOrders, createOrder, updateOrderStatus, getEmployees, createEmployee, deleteEmployee, updateOrderFull, registerPayment, deleteOrder, updateAppSettings, createCheckoutSession, deleteOrderPayment, convertQuoteToOrder, updateEmployee, getAccounts, getTransactions, getOrderById } from '../services/mockData';
 import { Dashboard } from './Dashboard';
 import { FinanceModule } from './FinanceModule';
@@ -745,14 +745,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       }
   };
 
-  const getSizeSummary = (items: { size: string; quantity: number }[]) => {
+  const getSizeSummary = (items: OrderItem[]) => {
       const summary: Record<string, number> = {};
       let totalItems = 0;
 
       items.forEach(item => {
-          const size = item.size ? item.size.toUpperCase().trim() : 'UN';
-          summary[size] = (summary[size] || 0) + item.quantity;
-          totalItems += item.quantity;
+          if (item.isSet && item.subItems && item.subItems.length > 0) {
+              item.subItems.forEach(sub => {
+                  const size = sub.size ? sub.size.toUpperCase().trim() : 'UN';
+                  summary[size] = (summary[size] || 0) + item.quantity;
+                  totalItems += item.quantity;
+              });
+          } else {
+              const size = item.size ? item.size.toUpperCase().trim() : 'UN';
+              summary[size] = (summary[size] || 0) + item.quantity;
+              totalItems += item.quantity;
+          }
       });
 
       return { summary, totalItems };
@@ -889,8 +897,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             <tbody>
               ${viewingOrder.items.map(item => `
                 <tr>
-                  <td>${item.name}</td>
-                  <td class="text-center">${item.size || '-'}</td>
+                  <td>
+                    <div style="font-weight: bold;">${item.name} ${item.isSet ? '<span style="font-size: 8px; background: #faf5ff; color: #6b21a8; border: 1px solid #d8b4fe; padding: 1px 4px; border-radius: 4px; margin-left: 4px; vertical-align: middle;">CONJUNTO</span>' : ''}</div>
+                    ${item.isSet && item.subItems && item.subItems.length > 0 ? `
+                      <div style="font-size: 10px; color: #6b7280; margin-top: 4px;">
+                        ${item.subItems.map(si => `<span style="display: inline-block; background: #f9fafb; border: 1px solid #e5e7eb; padding: 1px 4px; border-radius: 3px; margin-right: 4px; margin-bottom: 2px;">${si.name}: <b>${si.size}</b></span>`).join('')}
+                      </div>
+                    ` : ''}
+                  </td>
+                  <td class="text-center">${item.isSet ? '-' : (item.size || '-')}</td>
                   <td class="text-center">${item.quantity}</td>
                   ${isQuote ? `
                   <td class="text-right">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price)}</td>
@@ -1997,13 +2012,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                       value={tempItem.name}
                       onChange={e => setTempItem({...tempItem, name: e.target.value})}
                     />
-                    <input 
-                      type="text" 
-                      placeholder="Tamanho Geral" 
-                      className="w-28 border border-gray-300 rounded-lg p-2.5 text-sm"
-                      value={tempItem.size}
-                      onChange={e => setTempItem({...tempItem, size: e.target.value})}
-                    />
+                    {!tempItem.isSet && (
+                      <input 
+                        type="text" 
+                        placeholder="Tamanho Geral" 
+                        className="w-28 border border-gray-300 rounded-lg p-2.5 text-sm"
+                        value={tempItem.size}
+                        onChange={e => setTempItem({...tempItem, size: e.target.value})}
+                      />
+                    )}
                   </div>
                   
                   <div className="flex items-center justify-between">
@@ -2439,7 +2456,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-center text-gray-600 font-bold">{item.size || '-'}</td>
+                                        <td className="px-4 py-3 text-sm text-center text-gray-600 font-bold">{item.isSet ? '-' : (item.size || '-')}</td>
                                         <td className="px-4 py-3 text-sm text-center text-gray-600">{item.quantity}</td>
                                         <td className="px-4 py-3 text-sm text-right text-gray-600">
                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price)}
