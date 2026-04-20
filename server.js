@@ -105,7 +105,16 @@ async function initDatabase() {
         quantity INT,
         price DECIMAL(10, 2),
         image TEXT,
+        is_set BOOLEAN DEFAULT FALSE,
         FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS order_sub_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        item_id INT,
+        name VARCHAR(100),
+        size VARCHAR(20),
+        FOREIGN KEY (item_id) REFERENCES order_items(id) ON DELETE CASCADE
       );
 
       CREATE TABLE IF NOT EXISTS order_timeline (
@@ -188,7 +197,8 @@ async function initDatabase() {
        "ALTER TABLE finance_transactions MODIFY COLUMN paymentMethod VARCHAR(255)",
        "ALTER TABLE financial_accounts ADD COLUMN active BOOLEAN DEFAULT TRUE",
        "ALTER TABLE financial_accounts ADD COLUMN initial_balance DECIMAL(10, 2) DEFAULT 0",
-       "ALTER TABLE financial_accounts ADD COLUMN initial_balance_date VARCHAR(20)"
+       "ALTER TABLE financial_accounts ADD COLUMN initial_balance_date VARCHAR(20)",
+       "ALTER TABLE order_items ADD COLUMN is_set BOOLEAN DEFAULT FALSE"
     ];
 
     for (const query of migrationQueries) {
@@ -767,6 +777,17 @@ app.get('/api/orders', async (req, res) => {
     
     const fullOrders = await Promise.all(orders.map(async (order) => {
       const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
+      
+      const itemsWithSubItems = await Promise.all(items.map(async (item) => {
+        const [subItems] = await pool.query('SELECT name, size FROM order_sub_items WHERE item_id = ?', [item.id]);
+        return {
+          ...item,
+          price: parseFloat(item.price),
+          isSet: !!item.is_set,
+          subItems: subItems
+        };
+      }));
+
       const [timeline] = await pool.query('SELECT * FROM order_timeline WHERE order_id = ?', [order.id]);
       
       // Fetch downPaymentAccountId from finance_transactions
@@ -781,7 +802,7 @@ app.get('/api/orders', async (req, res) => {
         total: parseFloat(order.total),
         downPayment: parseFloat(order.downPayment),
         downPaymentAccountId,
-        items: items.map(i => ({...i, price: parseFloat(i.price)})),
+        items: itemsWithSubItems,
         timeline: timeline.map(t => ({...t, completed: !!t.completed})),
         photos: [], // Lista vazia na listagem
         discount: parseFloat(order.discount || 0),
@@ -816,6 +837,17 @@ app.get('/api/orders/:id', async (req, res) => {
     }
 
     const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
+
+    const itemsWithSubItems = await Promise.all(items.map(async (item) => {
+      const [subItems] = await pool.query('SELECT name, size FROM order_sub_items WHERE item_id = ?', [item.id]);
+      return {
+        ...item,
+        price: parseFloat(item.price),
+        isSet: !!item.is_set,
+        subItems: subItems
+      };
+    }));
+
     const [timeline] = await pool.query('SELECT * FROM order_timeline WHERE order_id = ?', [order.id]);
     const [photos] = await pool.query('SELECT photo_data FROM order_photos WHERE order_id = ?', [order.id]);
 
@@ -831,7 +863,7 @@ app.get('/api/orders/:id', async (req, res) => {
       total: parseFloat(order.total),
       downPayment: parseFloat(order.downPayment),
       downPaymentAccountId,
-      items: items.map(i => ({...i, price: parseFloat(i.price)})),
+      items: itemsWithSubItems,
       timeline: timeline.map(t => ({...t, completed: !!t.completed})),
       photos: photos.map(p => p.photo_data),
       discount: parseFloat(order.discount || 0),
@@ -865,8 +897,17 @@ app.post('/api/orders', async (req, res) => {
     );
 
     if (order.items && order.items.length > 0) {
-      const itemValues = order.items.map(item => [order.id, item.name, item.size, item.quantity, item.price, item.image]);
-      await conn.query('INSERT INTO order_items (order_id, name, size, quantity, price, image) VALUES ?', [itemValues]);
+      for (const item of order.items) {
+        const [result] = await conn.query(
+          'INSERT INTO order_items (order_id, name, size, quantity, price, image, is_set) VALUES (?, ?, ?, ?, ?, ?, ?)', 
+          [order.id, item.name, item.size, item.quantity, item.price, item.image, item.isSet ? 1 : 0]
+        );
+        const itemId = result.insertId;
+        if (item.isSet && item.subItems && item.subItems.length > 0) {
+          const subItemValues = item.subItems.map(si => [itemId, si.name, si.size]);
+          await conn.query('INSERT INTO order_sub_items (item_id, name, size) VALUES ?', [subItemValues]);
+        }
+      }
     }
 
     if (order.timeline && order.timeline.length > 0) {
@@ -993,8 +1034,17 @@ app.put('/api/orders/:id', async (req, res) => {
 
     await conn.query('DELETE FROM order_items WHERE order_id = ?', [orderId]);
     if (order.items && order.items.length > 0) {
-      const itemValues = order.items.map(item => [orderId, item.name, item.size, item.quantity, item.price, item.image]);
-      await conn.query('INSERT INTO order_items (order_id, name, size, quantity, price, image) VALUES ?', [itemValues]);
+      for (const item of order.items) {
+        const [result] = await conn.query(
+          'INSERT INTO order_items (order_id, name, size, quantity, price, image, is_set) VALUES (?, ?, ?, ?, ?, ?, ?)', 
+          [orderId, item.name, item.size, item.quantity, item.price, item.image, item.isSet ? 1 : 0]
+        );
+        const itemId = result.insertId;
+        if (item.isSet && item.subItems && item.subItems.length > 0) {
+          const subItemValues = item.subItems.map(si => [itemId, si.name, si.size]);
+          await conn.query('INSERT INTO order_sub_items (item_id, name, size) VALUES ?', [subItemValues]);
+        }
+      }
     }
 
     await conn.query('DELETE FROM order_photos WHERE order_id = ?', [orderId]);

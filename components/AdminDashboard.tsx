@@ -307,6 +307,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   
   // Item Editing State
   const [tempItem, setTempItem] = useState<{
+    id?: string;
+    image?: string;
     name: string;
     size: string;
     price: string;
@@ -376,6 +378,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           printingDate: fullOrder.printingDate || '',
           seamstress: fullOrder.seamstress || '',
           items: fullOrder.items.map(i => ({ 
+              ...i,
               name: i.name, 
               size: i.size, 
               price: i.price, 
@@ -420,6 +423,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           printingDate: '',
           seamstress: '',
           items: fullOrder.items.map(i => ({ 
+            ...i,
             name: i.name, 
             size: i.size, 
             price: i.price, 
@@ -440,13 +444,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   const handleSaveItem = () => {
     if (!tempItem.name || !tempItem.price) return;
     
-    const newItem = { 
+    // Create new item preserving ID and image if possible
+    const newItem: OrderItem = { 
+        id: tempItem.id || Math.random().toString(36).substring(2, 11),
+        image: tempItem.image || '',
         name: tempItem.name, 
         size: tempItem.size, 
         price: Number(tempItem.price), 
         quantity: Number(tempItem.quantity),
-        isSet: tempItem.isSet,
-        subItems: tempItem.isSet ? tempItem.subItems : undefined
+        isSet: !!tempItem.isSet,
+        subItems: tempItem.isSet ? [...tempItem.subItems] : []
     };
 
     setOrderForm(prev => {
@@ -470,12 +477,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
   const handleEditItem = (index: number) => {
       const itemToEdit = orderForm.items[index];
       setTempItem({
+          id: itemToEdit.id,
+          image: itemToEdit.image || '',
           name: itemToEdit.name,
           size: itemToEdit.size || '',
           price: itemToEdit.price.toString(),
           quantity: itemToEdit.quantity.toString(),
           isSet: !!itemToEdit.isSet,
-          subItems: itemToEdit.subItems || []
+          subItems: itemToEdit.subItems ? [...itemToEdit.subItems] : []
       });
       setEditingItemIndex(index);
   }
