@@ -53,7 +53,15 @@ export const ReportsModule: React.FC = () => {
                 const compareDate = parseDateToComparable(targetDate);
                 return compareDate >= dateStart && compareDate <= dateEnd;
             });
-            setOrders(filtered);
+
+            // Sort by date (ascending)
+            const sorted = [...filtered].sort((a, b) => {
+                const d1 = parseDateToComparable(dateFilterType === 'orderDate' ? a.orderDate : a.estimatedDelivery);
+                const d2 = parseDateToComparable(dateFilterType === 'orderDate' ? b.orderDate : b.estimatedDelivery);
+                return d1.localeCompare(d2);
+            });
+
+            setOrders(sorted);
         } catch (err) {
             console.error("Error fetching orders for report:", err);
         } finally {
@@ -82,7 +90,11 @@ export const ReportsModule: React.FC = () => {
                 return true; // Keep expenses or unlinked transactions
             });
 
-            setTransactions(filteredTrans);
+            setTransactions(filteredTrans.sort((a, b) => {
+                const d1 = parseDateToComparable(a.date);
+                const d2 = parseDateToComparable(b.date);
+                return d1.localeCompare(d2);
+            }));
         } catch (err) {
             console.error("Error fetching finance report:", err);
         } finally {
@@ -524,7 +536,14 @@ const ReceivablesList: React.FC<{ dateStart: string, dateEnd: string, formatCurr
                 const compareDate = parseDateToComparable(o.estimatedDelivery); 
                 return balance > 0 && compareDate >= dateStart && compareDate <= dateEnd;
             });
-            setReceivables(filtered);
+            
+            const sorted = [...filtered].sort((a, b) => {
+                const d1 = parseDateToComparable(a.estimatedDelivery);
+                const d2 = parseDateToComparable(b.estimatedDelivery);
+                return d1.localeCompare(d2);
+            });
+
+            setReceivables(sorted);
             if (onTotalChange) {
                 const total = filtered.reduce((acc, o) => acc + (Number(o.total) - Number(o.downPayment)), 0);
                 onTotalChange(total);
