@@ -1260,7 +1260,7 @@ app.delete('/api/orders/:orderId/payments/:transactionId', async (req, res) => {
             // This is tricky because the string is formatted. 
             // We'll try to remove the part that matches the amount and method.
             let methods = order.paymentMethod ? order.paymentMethod.split(' + ') : [];
-            const amountStr = trans.amount.toFixed(2).replace('.', ',');
+            const amountStr = parseFloat(trans.amount || 0).toFixed(2).replace('.', ',');
             
             // Find the index of the method that contains the amount
             const index = methods.findIndex(m => m.includes(`R$ ${amountStr}`) && m.includes(trans.paymentMethod));
@@ -1490,22 +1490,57 @@ app.put('/api/finance/transactions/:id', async (req, res) => {
         
         const old = oldRows[0];
 
-        // RESTRICTION: If linked to an order, only accountId can be changed
+        // Check if transaction is linked to an order
         if (old.order_id) {
-            // Only update account_id
-            // Revert old balance if account changed
-            if (old.account_id !== accountId) {
-                if (old.account_id) {
-                    const oldBalanceChange = old.type === 'revenue' ? -old.amount : old.amount;
-                    await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [oldBalanceChange, old.account_id]);
-                }
-                if (accountId) {
-                    const newBalanceChange = old.type === 'revenue' ? old.amount : -old.amount;
-                    await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [newBalanceChange, accountId]);
-                }
+            const orderId = old.order_id;
+            const oldAmount = parseFloat(old.amount || 0);
+            const newAmount = parseFloat(amount || 0);
+
+            // Revert old balance
+            if (old.account_id) {
+                const oldBalanceChange = old.type === 'revenue' ? -oldAmount : oldAmount;
+                await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [oldBalanceChange, old.account_id]);
             }
-            // Always update the account_id in the transaction record if it changed
-            await conn.query('UPDATE finance_transactions SET account_id = ? WHERE id = ?', [accountId || null, transactionId]);
+
+            // Apply new balance
+            if (accountId) {
+                const newBalanceChange = (type || 'revenue') === 'revenue' ? newAmount : -newAmount;
+                await conn.query('UPDATE financial_accounts SET balance = balance + ? WHERE id = ?', [newBalanceChange, accountId]);
+            }
+
+            // Update transaction record fully
+            let newDesc = description || old.description;
+            if (old.paymentMethod && paymentMethod && newDesc.includes(`(${old.paymentMethod})`)) {
+                newDesc = newDesc.replace(`(${old.paymentMethod})`, `(${paymentMethod})`);
+            }
+            await conn.query(
+                'UPDATE finance_transactions SET type = ?, description = ?, amount = ?, date = ?, paymentMethod = ?, account_id = ? WHERE id = ?',
+                [type || 'revenue', newDesc, newAmount, date || old.date, paymentMethod || old.paymentMethod, accountId || null, transactionId]
+            );
+
+            // Update associated order's downPayment and paymentMethod string
+            const [orderRows] = await conn.query('SELECT downPayment, paymentMethod FROM orders WHERE id = ? AND company_id = ?', [orderId, companyId]);
+            if (orderRows.length > 0) {
+                const order = orderRows[0];
+                const newDownPayment = Math.max(0, parseFloat(order.downPayment || 0) - oldAmount + newAmount);
+                
+                let methods = order.paymentMethod ? order.paymentMethod.split(' + ') : [];
+                const oldAmountStr = oldAmount.toFixed(2).replace('.', ',');
+                
+                // Track if we updated any in the list
+                const index = methods.findIndex(m => m.includes(`R$ ${oldAmountStr}`) && m.includes(old.paymentMethod || ''));
+                if (index !== -1) {
+                    const formattedDate = date ? date.split('-').reverse().join('/') : (old.date || new Date().toLocaleDateString('pt-BR'));
+                    const newAmountStr = newAmount.toFixed(2).replace('.', ',');
+                    const methodWithAmount = `${paymentMethod || old.paymentMethod} (R$ ${newAmountStr})`;
+                    const methodWithDate = `${methodWithAmount} - ${formattedDate}`;
+                    
+                    methods[index] = methodWithDate;
+                }
+                const newPaymentMethod = methods.join(' + ');
+
+                await conn.query('UPDATE orders SET downPayment = ?, paymentMethod = ? WHERE id = ?', [newDownPayment, newPaymentMethod, orderId]);
+            }
         } else {
             // Manual transaction: full edit allowed
             // Revert old balance

@@ -286,6 +286,18 @@ export const createOrder = async (input: NewOrderInput): Promise<Order> => {
         completed: false
       },
       {
+        status: OrderStatus.COSTURA,
+        timestamp: '-',
+        description: 'Aguardando início da costura.',
+        completed: false
+      },
+      {
+        status: OrderStatus.AGUARDANDO_RETIRADA,
+        timestamp: '-',
+        description: 'Aguardando retirada pelo cliente.',
+        completed: false
+      },
+      {
         status: OrderStatus.CONCLUIDO,
         timestamp: '-',
         description: 'Aguardando conclusão.',
@@ -402,8 +414,10 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus,
     let description = '';
     switch(newStatus) {
         case OrderStatus.PEDIDO_FEITO: description = 'Pedido realizado com sucesso.'; break;
-        case OrderStatus.EM_PRODUCAO: description = 'Seu pedido entrou em produção (Corte/Estampa/Costura).'; break;
-        case OrderStatus.CONCLUIDO: description = 'Pedido concluído e pronto para entrega/retirada.'; break;
+        case OrderStatus.EM_PRODUCAO: description = 'Seu pedido entrou em produção.'; break;
+        case OrderStatus.COSTURA: description = 'Seu pedido está no setor de costura.'; break;
+        case OrderStatus.AGUARDANDO_RETIRADA: description = 'Pedido finalizado e aguardando retirada/envio.'; break;
+        case OrderStatus.CONCLUIDO: description = 'Pedido concluído com sucesso!'; break;
         case OrderStatus.CANCELADO: description = 'Pedido cancelado.'; break;
         default: description = 'Status atualizado.';
     }
@@ -412,8 +426,10 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus,
         const weights = {
             [OrderStatus.PEDIDO_FEITO]: 1,
             [OrderStatus.EM_PRODUCAO]: 2,
-            [OrderStatus.CONCLUIDO]: 3,
-            [OrderStatus.CANCELADO]: 4
+            [OrderStatus.COSTURA]: 3,
+            [OrderStatus.AGUARDANDO_RETIRADA]: 4,
+            [OrderStatus.CONCLUIDO]: 5,
+            [OrderStatus.CANCELADO]: 6
         };
         return weights[s] || 0;
     }
