@@ -1107,7 +1107,22 @@ app.patch('/api/orders/:id/status', async (req, res) => {
       const { currentStatus, timeline } = req.body;
       const orderId = req.params.id;
 
-      await conn.query('UPDATE orders SET currentStatus = ? WHERE id = ?', [currentStatus, orderId]);
+      if (currentStatus === 'CANCELADO') {
+          // Reverter saldos das contas bancárias de todos os pagamentos vinculados ao pedido cancelado
+          const [transRows] = await conn.query('SELECT amount, account_id, type FROM finance_transactions WHERE order_id = ?', [orderId]);
+          for (const trans of transRows) {
+              if (trans.account_id) {
+                  const balanceChange = trans.type === 'revenue' ? trans.amount : -trans.amount;
+                  await conn.query('UPDATE financial_accounts SET balance = balance - ? WHERE id = ?', [balanceChange, trans.account_id]);
+              }
+          }
+          // Excluir todas as transações financeiras vinculadas ao pedido de forma definitiva
+          await conn.query('DELETE FROM finance_transactions WHERE order_id = ?', [orderId]);
+          // Atualizar o status do pedido para Cancelado e zerar o adiantamento/meio de pagamento registrado
+          await conn.query('UPDATE orders SET currentStatus = ?, downPayment = 0, paymentMethod = \'\' WHERE id = ?', [currentStatus, orderId]);
+      } else {
+          await conn.query('UPDATE orders SET currentStatus = ? WHERE id = ?', [currentStatus, orderId]);
+      }
       
       await conn.query('DELETE FROM order_timeline WHERE order_id = ?', [orderId]);
       if (timeline && timeline.length > 0) {
