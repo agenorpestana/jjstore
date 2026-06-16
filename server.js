@@ -1084,7 +1084,11 @@ app.patch('/api/orders/:id/convert', async (req, res) => {
         );
 
         // Adiciona os próximos passos na timeline (vazios)
+        await conn.query("INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)", [orderId, 'ARQUIVO_MONTADO', '-', 'Aguardando montagem do arquivo.', false]);
+        await conn.query("INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)", [orderId, 'IMPRESSO', '-', 'Aguardando impressão.', false]);
         await conn.query("INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)", [orderId, 'EM_PRODUCAO', '-', 'Aguardando início da produção.', false]);
+        await conn.query("INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)", [orderId, 'COSTURA', '-', 'Aguardando início da costura.', false]);
+        await conn.query("INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)", [orderId, 'AGUARDANDO_RETIRADA', '-', 'Aguardando retirada pelo cliente.', false]);
         await conn.query("INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)", [orderId, 'CONCLUIDO', '-', 'Aguardando conclusão.', false]);
 
         await conn.commit();

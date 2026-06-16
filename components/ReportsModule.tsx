@@ -13,6 +13,21 @@ const parseDateToComparable = (dateStr?: string) => {
     return dateStr || '';
 };
 
+const getReportStatusLabel = (status: OrderStatus) => {
+    switch (status) {
+        case OrderStatus.PEDIDO_FEITO: return "Pedido Feito";
+        case OrderStatus.ARQUIVO_MONTADO: return "Arquivo Montado";
+        case OrderStatus.IMPRESSO: return "Impresso";
+        case OrderStatus.EM_PRODUCAO: return "Em Produção";
+        case OrderStatus.COSTURA: return "Costura";
+        case OrderStatus.AGUARDANDO_RETIRADA: return "Aguardando Retirada";
+        case OrderStatus.CONCLUIDO: return "Concluído";
+        case OrderStatus.CANCELADO: return "Cancelado";
+        case OrderStatus.ORCAMENTO: return "Orçamento";
+        default: return status;
+    }
+};
+
 export const ReportsModule: React.FC = () => {
     const [reportType, setReportType] = useState<'orders' | 'finance'>('orders');
     const [dateFilterType, setDateFilterType] = useState<'orderDate' | 'deliveryDate'>('orderDate');
@@ -229,7 +244,7 @@ export const ReportsModule: React.FC = () => {
                                                         : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
                                                 }`}
                                             >
-                                                {status}
+                                                {getReportStatusLabel(status)}
                                             </button>
                                         ))}
                                     </div>

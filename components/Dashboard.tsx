@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { Package, TrendingUp, Calendar, CheckCircle, Clock, DollarSign, ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react';
+import { Package, TrendingUp, Calendar, CheckCircle, Clock, DollarSign, ArrowUpRight, ArrowDownRight, Wallet, Layers, Printer } from 'lucide-react';
 import { DashboardData, OrderStatus } from '../types';
 import { getDashboardData } from '../services/mockData';
 
@@ -41,6 +41,8 @@ export const Dashboard: React.FC = () => {
 
     const statusMap: Record<string, { label: string, color: string, icon: any }> = {
         [OrderStatus.PEDIDO_FEITO]: { label: 'Feito', color: 'bg-blue-100 text-blue-700', icon: Package },
+        [OrderStatus.ARQUIVO_MONTADO]: { label: 'Arq. Montado', color: 'bg-indigo-100 text-indigo-700', icon: Layers },
+        [OrderStatus.IMPRESSO]: { label: 'Impresso', color: 'bg-pink-100 text-pink-700', icon: Printer },
         [OrderStatus.EM_PRODUCAO]: { label: 'Em Produção', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
         [OrderStatus.AGUARDANDO_RETIRADA]: { label: 'Aguardando Retirada', color: 'bg-purple-100 text-purple-700', icon: Package },
         [OrderStatus.CONCLUIDO]: { label: 'Concluído', color: 'bg-green-100 text-green-700', icon: CheckCircle },

@@ -280,6 +280,18 @@ export const createOrder = async (input: NewOrderInput): Promise<Order> => {
         completed: true
       },
       {
+        status: OrderStatus.ARQUIVO_MONTADO,
+        timestamp: '-',
+        description: 'Aguardando montagem do arquivo.',
+        completed: false
+      },
+      {
+        status: OrderStatus.IMPRESSO,
+        timestamp: '-',
+        description: 'Aguardando impressão.',
+        completed: false
+      },
+      {
         status: OrderStatus.EM_PRODUCAO,
         timestamp: '-',
         description: 'Aguardando início da produção.',
@@ -414,6 +426,8 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus,
     let description = '';
     switch(newStatus) {
         case OrderStatus.PEDIDO_FEITO: description = 'Pedido realizado com sucesso.'; break;
+        case OrderStatus.ARQUIVO_MONTADO: description = 'Arquivo montado com sucesso.'; break;
+        case OrderStatus.IMPRESSO: description = 'Seu pedido foi impresso.'; break;
         case OrderStatus.EM_PRODUCAO: description = 'Seu pedido entrou em produção.'; break;
         case OrderStatus.COSTURA: description = 'Seu pedido está no setor de costura.'; break;
         case OrderStatus.AGUARDANDO_RETIRADA: description = 'Pedido finalizado e aguardando retirada/envio.'; break;
@@ -424,12 +438,15 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus,
 
     const getStatusWeight = (s: OrderStatus) => {
         const weights = {
+            [OrderStatus.ORCAMENTO]: 0,
             [OrderStatus.PEDIDO_FEITO]: 1,
-            [OrderStatus.EM_PRODUCAO]: 2,
-            [OrderStatus.COSTURA]: 3,
-            [OrderStatus.AGUARDANDO_RETIRADA]: 4,
-            [OrderStatus.CONCLUIDO]: 5,
-            [OrderStatus.CANCELADO]: 6
+            [OrderStatus.ARQUIVO_MONTADO]: 2,
+            [OrderStatus.IMPRESSO]: 3,
+            [OrderStatus.EM_PRODUCAO]: 4,
+            [OrderStatus.COSTURA]: 5,
+            [OrderStatus.AGUARDANDO_RETIRADA]: 6,
+            [OrderStatus.CONCLUIDO]: 7,
+            [OrderStatus.CANCELADO]: 8
         };
         return weights[s] || 0;
     }

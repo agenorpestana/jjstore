@@ -1436,6 +1436,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             Pedido Feito
           </span>
         );
+      case OrderStatus.ARQUIVO_MONTADO:
+        return (
+          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-teal-100 text-teal-800">
+            Arquivo Montado
+          </span>
+        );
+      case OrderStatus.IMPRESSO:
+        return (
+          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-pink-100 text-pink-800">
+            Impresso
+          </span>
+        );
       case OrderStatus.EM_PRODUCAO:
         return (
           <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
@@ -1680,8 +1692,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <option value={OrderStatus.PEDIDO_FEITO}>
                           Pedido Feito
                         </option>
+                        <option value={OrderStatus.ARQUIVO_MONTADO}>
+                          Arquivo Montado
+                        </option>
+                        <option value={OrderStatus.IMPRESSO}>
+                          Impresso
+                        </option>
                         <option value={OrderStatus.EM_PRODUCAO}>
                           Em Produção
+                        </option>
+                        <option value={OrderStatus.COSTURA}>
+                          Costura
                         </option>
                         <option value={OrderStatus.AGUARDANDO_RETIRADA}>
                           Aguardando Retirada
@@ -3246,6 +3267,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="space-y-2">
                 {[
                   OrderStatus.PEDIDO_FEITO,
+                  OrderStatus.ARQUIVO_MONTADO,
+                  OrderStatus.IMPRESSO,
                   OrderStatus.EM_PRODUCAO,
                   OrderStatus.COSTURA,
                   OrderStatus.AGUARDANDO_RETIRADA,
@@ -3267,6 +3290,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   >
                     <span className="font-medium text-gray-700">
                       {status === OrderStatus.PEDIDO_FEITO && "📋 Pedido Feito"}
+                      {status === OrderStatus.ARQUIVO_MONTADO && "📁 Arquivo Montado"}
+                      {status === OrderStatus.IMPRESSO && "🖨️ Impresso"}
                       {status === OrderStatus.EM_PRODUCAO && "👕 Em Produção"}
                       {status === OrderStatus.COSTURA && "🪡 Costura"}
                       {status === OrderStatus.AGUARDANDO_RETIRADA &&
