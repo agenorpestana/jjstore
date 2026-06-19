@@ -15,7 +15,8 @@ const parseDateToComparable = (dateStr?: string) => {
 
 const getReportStatusLabel = (status: OrderStatus) => {
     switch (status) {
-        case OrderStatus.PEDIDO_FEITO: return "Pedido Feito";
+        case OrderStatus.MONTAR_ARTE: return "Montar Arte";
+        case OrderStatus.PEDIDO_FEITO: return "Pedido Aprovado";
         case OrderStatus.ARQUIVO_MONTADO: return "Arquivo Montado";
         case OrderStatus.IMPRESSO: return "Impresso";
         case OrderStatus.EM_PRODUCAO: return "Em Produção";

@@ -257,8 +257,8 @@ export const createOrder = async (input: NewOrderInput): Promise<Order> => {
     downPaymentAccountId: input.downPaymentAccountId,
     discount: input.discount || 0,
     discountType: input.discountType || 'fixed',
-    // Se for orçamento, usa status ORCAMENTO, senão PEDIDO_FEITO
-    currentStatus: input.isQuote ? OrderStatus.ORCAMENTO : OrderStatus.PEDIDO_FEITO,
+    // Se for orçamento, usa status ORCAMENTO, senão MONTAR_ARTE
+    currentStatus: input.isQuote ? OrderStatus.ORCAMENTO : OrderStatus.MONTAR_ARTE,
     total,
     photos: input.photos || [],
     pressingDate: input.pressingDate,
@@ -274,10 +274,16 @@ export const createOrder = async (input: NewOrderInput): Promise<Order> => {
     })),
     timeline: input.isQuote ? [] : [ // Orçamento não tem timeline inicial de produção
       {
-        status: OrderStatus.PEDIDO_FEITO,
+        status: OrderStatus.MONTAR_ARTE,
         timestamp: new Date().toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' }),
-        description: `Pedido criado. Entrada de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(input.downPayment)} recebida via ${input.paymentMethod}.`,
+        description: 'Montagem de arte iniciada.',
         completed: true
+      },
+      {
+        status: OrderStatus.PEDIDO_FEITO,
+        timestamp: '-',
+        description: `Pedido aprovado. Entrada de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(input.downPayment)} recebida via ${input.paymentMethod}.`,
+        completed: false
       },
       {
         status: OrderStatus.ARQUIVO_MONTADO,
@@ -425,7 +431,8 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus,
     const timestamp = new Date().toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' });
     let description = '';
     switch(newStatus) {
-        case OrderStatus.PEDIDO_FEITO: description = 'Pedido realizado com sucesso.'; break;
+        case OrderStatus.MONTAR_ARTE: description = 'Arte enviada para montagem.'; break;
+        case OrderStatus.PEDIDO_FEITO: description = 'Pedido aprovado com sucesso.'; break;
         case OrderStatus.ARQUIVO_MONTADO: description = 'Arquivo montado com sucesso.'; break;
         case OrderStatus.IMPRESSO: description = 'Seu pedido foi impresso.'; break;
         case OrderStatus.EM_PRODUCAO: description = 'Seu pedido entrou em produção.'; break;
@@ -439,14 +446,15 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus,
     const getStatusWeight = (s: OrderStatus) => {
         const weights = {
             [OrderStatus.ORCAMENTO]: 0,
-            [OrderStatus.PEDIDO_FEITO]: 1,
-            [OrderStatus.ARQUIVO_MONTADO]: 2,
-            [OrderStatus.IMPRESSO]: 3,
-            [OrderStatus.EM_PRODUCAO]: 4,
-            [OrderStatus.COSTURA]: 5,
-            [OrderStatus.AGUARDANDO_RETIRADA]: 6,
-            [OrderStatus.CONCLUIDO]: 7,
-            [OrderStatus.CANCELADO]: 8
+            [OrderStatus.MONTAR_ARTE]: 1,
+            [OrderStatus.PEDIDO_FEITO]: 2,
+            [OrderStatus.ARQUIVO_MONTADO]: 3,
+            [OrderStatus.IMPRESSO]: 4,
+            [OrderStatus.EM_PRODUCAO]: 5,
+            [OrderStatus.COSTURA]: 6,
+            [OrderStatus.AGUARDANDO_RETIRADA]: 7,
+            [OrderStatus.CONCLUIDO]: 8,
+            [OrderStatus.CANCELADO]: 9
         };
         return weights[s] || 0;
     }

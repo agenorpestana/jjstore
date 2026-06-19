@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Package, Shirt, CheckCircle, ClipboardList, Scissors, Layers, Printer } from 'lucide-react';
+import { Check, Package, Shirt, CheckCircle, ClipboardList, Scissors, Layers, Printer, Palette } from 'lucide-react';
 import { OrderStatus, StatusEvent } from '../types';
 
 interface StatusTimelineProps {
@@ -10,6 +10,7 @@ interface StatusTimelineProps {
 export const StatusTimeline: React.FC<StatusTimelineProps> = ({ timeline }) => {
   const getIcon = (status: OrderStatus) => {
     switch (status) {
+      case OrderStatus.MONTAR_ARTE: return <Palette size={20} />;
       case OrderStatus.PEDIDO_FEITO: return <ClipboardList size={20} />;
       case OrderStatus.ARQUIVO_MONTADO: return <Layers size={20} />;
       case OrderStatus.IMPRESSO: return <Printer size={20} />;
@@ -23,7 +24,8 @@ export const StatusTimeline: React.FC<StatusTimelineProps> = ({ timeline }) => {
 
   const getStatusLabel = (status: OrderStatus) => {
       switch (status) {
-          case OrderStatus.PEDIDO_FEITO: return 'Pedido Feito';
+          case OrderStatus.MONTAR_ARTE: return 'Montar Arte';
+          case OrderStatus.PEDIDO_FEITO: return 'Pedido Aprovado';
           case OrderStatus.ARQUIVO_MONTADO: return 'Arquivo Montado';
           case OrderStatus.IMPRESSO: return 'Impresso';
           case OrderStatus.EM_PRODUCAO: return 'Em Produção';

@@ -1430,10 +1430,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             Orçamento
           </span>
         );
+      case OrderStatus.MONTAR_ARTE:
+        return (
+          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+            Montar Arte
+          </span>
+        );
       case OrderStatus.PEDIDO_FEITO:
         return (
-          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">
-            Pedido Feito
+          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+            Pedido Aprovado
           </span>
         );
       case OrderStatus.ARQUIVO_MONTADO:
@@ -1689,8 +1695,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <option value="ALL">Todos os Status</option>
                     {activeTab === "orders" && (
                       <>
+                        <option value={OrderStatus.MONTAR_ARTE}>
+                          Montar Arte
+                        </option>
                         <option value={OrderStatus.PEDIDO_FEITO}>
-                          Pedido Feito
+                          Pedido Aprovado
                         </option>
                         <option value={OrderStatus.ARQUIVO_MONTADO}>
                           Arquivo Montado
@@ -3264,8 +3273,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <h4 className="text-sm font-medium text-gray-900 mb-3">
                 Atualizar para:
               </h4>
+
               <div className="space-y-2">
                 {[
+                  OrderStatus.MONTAR_ARTE,
                   OrderStatus.PEDIDO_FEITO,
                   OrderStatus.ARQUIVO_MONTADO,
                   OrderStatus.IMPRESSO,
@@ -3289,7 +3300,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       }`}
                   >
                     <span className="font-medium text-gray-700">
-                      {status === OrderStatus.PEDIDO_FEITO && "📋 Pedido Feito"}
+                      {status === OrderStatus.MONTAR_ARTE && "🎨 Montar Arte"}
+                      {status === OrderStatus.PEDIDO_FEITO && "📋 Pedido Aprovado"}
                       {status === OrderStatus.ARQUIVO_MONTADO && "📁 Arquivo Montado"}
                       {status === OrderStatus.IMPRESSO && "🖨️ Impresso"}
                       {status === OrderStatus.EM_PRODUCAO && "👕 Em Produção"}

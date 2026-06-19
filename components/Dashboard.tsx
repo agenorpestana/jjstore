@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { Package, TrendingUp, Calendar, CheckCircle, Clock, DollarSign, ArrowUpRight, ArrowDownRight, Wallet, Layers, Printer } from 'lucide-react';
+import { Package, TrendingUp, Calendar, CheckCircle, Clock, DollarSign, ArrowUpRight, ArrowDownRight, Wallet, Layers, Printer, Palette } from 'lucide-react';
 import { DashboardData, OrderStatus } from '../types';
 import { getDashboardData } from '../services/mockData';
 
@@ -40,14 +40,15 @@ export const Dashboard: React.FC = () => {
     };
 
     const statusMap: Record<string, { label: string, color: string, icon: any }> = {
-        [OrderStatus.PEDIDO_FEITO]: { label: 'Feito', color: 'bg-blue-100 text-blue-700', icon: Package },
-        [OrderStatus.ARQUIVO_MONTADO]: { label: 'Arq. Montado', color: 'bg-indigo-100 text-indigo-700', icon: Layers },
-        [OrderStatus.IMPRESSO]: { label: 'Impresso', color: 'bg-pink-100 text-pink-700', icon: Printer },
-        [OrderStatus.EM_PRODUCAO]: { label: 'Em Produção', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
-        [OrderStatus.AGUARDANDO_RETIRADA]: { label: 'Aguardando Retirada', color: 'bg-purple-100 text-purple-700', icon: Package },
-        [OrderStatus.CONCLUIDO]: { label: 'Concluído', color: 'bg-green-100 text-green-700', icon: CheckCircle },
-        [OrderStatus.CANCELADO]: { label: 'Cancelado', color: 'bg-red-100 text-red-700', icon: TrendingUp },
-        [OrderStatus.ORCAMENTO]: { label: 'Orçamento', color: 'bg-gray-100 text-gray-700', icon: TrendingUp },
+        [OrderStatus.MONTAR_ARTE]: { label: 'Montar Arte', color: 'bg-teal-50 text-teal-700 border border-teal-100', icon: Palette },
+        [OrderStatus.PEDIDO_FEITO]: { label: 'Aprovado', color: 'bg-blue-50 text-blue-700 border border-blue-100', icon: Package },
+        [OrderStatus.ARQUIVO_MONTADO]: { label: 'Arq. Montado', color: 'bg-indigo-50 text-indigo-700 border border-indigo-100', icon: Layers },
+        [OrderStatus.IMPRESSO]: { label: 'Impresso', color: 'bg-pink-50 text-pink-700 border border-pink-100', icon: Printer },
+        [OrderStatus.EM_PRODUCAO]: { label: 'Em Produção', color: 'bg-yellow-50 text-yellow-700 border border-yellow-100', icon: Clock },
+        [OrderStatus.AGUARDANDO_RETIRADA]: { label: 'Aguardando Ret.', color: 'bg-purple-50 text-purple-700 border border-purple-100', icon: Package },
+        [OrderStatus.CONCLUIDO]: { label: 'Concluído', color: 'bg-green-50 text-green-700 border border-green-100', icon: CheckCircle },
+        [OrderStatus.CANCELADO]: { label: 'Cancelado', color: 'bg-red-50 text-red-700 border border-red-100', icon: TrendingUp },
+        [OrderStatus.ORCAMENTO]: { label: 'Orçamento', color: 'bg-gray-50 text-gray-700 border border-gray-100', icon: TrendingUp },
     };
 
     return (
@@ -149,7 +150,7 @@ export const Dashboard: React.FC = () => {
                     {/* Status Summary List */}
                     <div className="md:col-span-3 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                         <h3 className="text-gray-900 font-semibold mb-4">Resumo por Status</h3>
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2">
                             {Object.entries(statusMap).map(([status, config]) => (
                                 <div key={status} className={`p-4 rounded-xl ${config.color} flex flex-col items-center justify-center text-center`}>
                                     <config.icon className="w-5 h-5 mb-2" />

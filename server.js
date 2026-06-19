@@ -1072,18 +1072,19 @@ app.patch('/api/orders/:id/convert', async (req, res) => {
         await conn.beginTransaction();
         const orderId = req.params.id;
         
-        // Atualiza status para PEDIDO_FEITO e adiciona na timeline
+        // Atualiza status para MONTAR_ARTE e adiciona na timeline
         const timestamp = new Date().toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' });
         
-        await conn.query("UPDATE orders SET currentStatus = 'PEDIDO_FEITO' WHERE id = ?", [orderId]);
+        await conn.query("UPDATE orders SET currentStatus = 'MONTAR_ARTE' WHERE id = ?", [orderId]);
         
         // Adiciona evento na timeline
         await conn.query(
             "INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)",
-            [orderId, 'PEDIDO_FEITO', timestamp, 'Orçamento aprovado e convertido em pedido.', true]
+            [orderId, 'MONTAR_ARTE', timestamp, 'Orçamento aprovado. Montagem de arte iniciada.', true]
         );
 
         // Adiciona os próximos passos na timeline (vazios)
+        await conn.query("INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)", [orderId, 'PEDIDO_FEITO', '-', 'Aguardando aprovação do pedido.', false]);
         await conn.query("INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)", [orderId, 'ARQUIVO_MONTADO', '-', 'Aguardando montagem do arquivo.', false]);
         await conn.query("INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)", [orderId, 'IMPRESSO', '-', 'Aguardando impressão.', false]);
         await conn.query("INSERT INTO order_timeline (order_id, status, timestamp, description, completed) VALUES (?, ?, ?, ?, ?)", [orderId, 'EM_PRODUCAO', '-', 'Aguardando início da produção.', false]);
@@ -1814,8 +1815,12 @@ app.get('/api/dashboard', async (req, res) => {
         const [statusRows] = await pool.query('SELECT currentStatus, COUNT(*) as count FROM orders WHERE company_id = ? GROUP BY currentStatus', [companyId]);
         const statusCounts = {
             'ORCAMENTO': 0,
+            'MONTAR_ARTE': 0,
             'PEDIDO_FEITO': 0,
+            'ARQUIVO_MONTADO': 0,
+            'IMPRESSO': 0,
             'EM_PRODUCAO': 0,
+            'COSTURA': 0,
             'AGUARDANDO_RETIRADA': 0,
             'CONCLUIDO': 0,
             'CANCELADO': 0
