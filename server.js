@@ -269,27 +269,93 @@ async function ensureDefaultAccount(companyId) {
 
 const calculateNextDueDate = (currentNextDue, trialEndsAt) => {
     const now = new Date();
-    let baseDate = now;
-
-    // Se já tem uma data de vencimento futura, usa ela como base
-    if (currentNextDue && new Date(currentNextDue) > now) {
-        baseDate = new Date(currentNextDue);
-    } 
-    // Se não tem vencimento, mas tem um trial futuro, usa o fim do trial como base
-    else if (trialEndsAt && new Date(trialEndsAt) > now) {
-        baseDate = new Date(trialEndsAt);
+    
+    // Determine the anchor day of the month from trialEndsAt
+    let anchorDay = 6; // Default fallback
+    if (trialEndsAt) {
+        anchorDay = new Date(trialEndsAt).getDate();
+    } else if (currentNextDue) {
+        anchorDay = new Date(currentNextDue).getDate();
     }
-    // Se tudo estiver no passado, a base continua sendo NOW
-
-    // Adiciona 30 dias
-    baseDate.setDate(baseDate.getDate() + 30);
-    return baseDate;
+    
+    // If we already have a future due date, we just add 1 month to it
+    if (currentNextDue && new Date(currentNextDue) > now) {
+        const nextDue = new Date(currentNextDue);
+        // Add 1 month safely preserving the anchor day if possible
+        nextDue.setMonth(nextDue.getMonth() + 1);
+        // Ensure day of month matches anchorDay
+        const tempDate = new Date(nextDue.getFullYear(), nextDue.getMonth(), anchorDay);
+        if (tempDate.getMonth() !== nextDue.getMonth()) {
+            nextDue.setDate(0); // set to last day of previous month
+        } else {
+            nextDue.setDate(anchorDay);
+        }
+        return nextDue;
+    }
+    
+    // Otherwise, we calculate the next due date based on the current date (now) and anchorDay
+    // We want the closest date with day = anchorDay that is in the future
+    let nextDue = new Date(now.getFullYear(), now.getMonth(), anchorDay);
+    
+    // If this date is in the past or is today, we move it to the next month
+    if (nextDue <= now) {
+        nextDue.setMonth(nextDue.getMonth() + 1);
+        // Safe set for anchorDay
+        const tempDate = new Date(nextDue.getFullYear(), nextDue.getMonth(), anchorDay);
+        if (tempDate.getMonth() !== nextDue.getMonth()) {
+            nextDue.setDate(0);
+        } else {
+            nextDue.setDate(anchorDay);
+        }
+    }
+    
+    return nextDue;
 }
 
 // --- API Routes (Prefix /api) ---
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', port: PORT });
+});
+
+app.get('/api/companies/status', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId || companyId === 'null') {
+            return res.json({ status: 'saas_admin' });
+        }
+        
+        const [rows] = await pool.query('SELECT status, trial_ends_at, next_payment_due, plan FROM companies WHERE id = ?', [companyId]);
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Empresa não encontrada' });
+        }
+        
+        const company = rows[0];
+        const now = new Date();
+        let currentStatus = company.status;
+        
+        // AUTOMATED CHECK: Update status if trial expired or payment overdue
+        if (currentStatus === 'trial' && company.trial_ends_at && new Date(company.trial_ends_at) < now) {
+            currentStatus = 'pending_payment';
+        }
+        if (currentStatus === 'active' && company.next_payment_due && new Date(company.next_payment_due) < now) {
+            currentStatus = 'pending_payment';
+        }
+        
+        if (currentStatus !== company.status) {
+            await pool.query('UPDATE companies SET status = ? WHERE id = ?', [currentStatus, companyId]);
+        }
+        
+        res.json({
+            status: currentStatus,
+            plan: company.plan,
+            trial_ends_at: company.trial_ends_at,
+            next_payment_due: company.next_payment_due
+        });
+    } catch (err) {
+        console.error("Erro ao obter status da empresa:", err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // --- SAAS SETTINGS (MP KEYS) ---

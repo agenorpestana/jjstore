@@ -70,6 +70,7 @@ import {
   getTransactions,
   getOrderById,
   updateTransaction,
+  getPlans,
 } from "../services/mockData";
 import { Dashboard } from "./Dashboard";
 import { FinanceModule } from "./FinanceModule";
@@ -157,6 +158,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Subscription Warning Logic
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
+  const [plans, setPlans] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (activeTab === "subscription" && isAdmin) {
+      const fetchPlans = async () => {
+        try {
+          const data = await getPlans();
+          setPlans(data);
+        } catch (err) {
+          console.error("Erro ao carregar planos em AdminDashboard:", err);
+        }
+      };
+      fetchPlans();
+    }
+  }, [activeTab, isAdmin]);
 
   useEffect(() => {
     if (
@@ -2300,6 +2316,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </label>
                       <div className="text-3xl font-bold text-gray-800 mt-1">
                         {currentUser.plan || "Plano Básico"}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-1 font-medium">
+                        {(() => {
+                          const currentPlanName = currentUser.plan || "Básico";
+                          const matched = plans.find(
+                            (p) => p.name.toLowerCase() === currentPlanName.toLowerCase()
+                          );
+                          if (matched) {
+                            return `Valor: R$ ${parseFloat(matched.price).toLocaleString("pt-BR", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })} / mês`;
+                          }
+                          // Fallbacks caso os planos ainda estejam carregando ou em offline
+                          if (currentPlanName.toLowerCase().includes("básico")) {
+                            return "Valor: R$ 49,90 / mês";
+                          }
+                          if (currentPlanName.toLowerCase().includes("pro")) {
+                            return "Valor: R$ 99,90 / mês";
+                          }
+                          if (currentPlanName.toLowerCase().includes("enterprise")) {
+                            return "Valor: R$ 199,90 / mês";
+                          }
+                          return "";
+                        })()}
                       </div>
                       <span
                         className={`inline-flex items-center gap-1 mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium 

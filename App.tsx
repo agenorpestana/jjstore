@@ -54,6 +54,24 @@ function App() {
             // Restaurar contexto da empresa para requisições
             if (user.companyId) {
                 setCompanyContext(user.companyId);
+                // Buscar status atualizado em segundo plano durante inicialização
+                if (user.accessLevel !== 'saas_admin') {
+                    try {
+                        const response = await fetch('/api/companies/status', {
+                            headers: { 'x-company-id': user.companyId }
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            user.companyStatus = data.status;
+                            user.next_payment_due = data.next_payment_due;
+                            user.trial_ends_at = data.trial_ends_at;
+                            user.plan = data.plan;
+                            localStorage.setItem('rastreae_user', JSON.stringify(user));
+                        }
+                    } catch (e) {
+                        console.error("Erro ao sincronizar status da empresa na inicialização:", e);
+                    }
+                }
             } else {
                 setCompanyContext('null'); // super admin
             }
@@ -110,6 +128,51 @@ function App() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
+
+  // Periodic and Window Focus check for company subscription status
+  useEffect(() => {
+    if (!currentUser || currentUser.accessLevel === 'saas_admin' || !currentUser.companyId) return;
+
+    const checkStatus = async () => {
+      try {
+        const response = await fetch('/api/companies/status', {
+          headers: { 'x-company-id': currentUser.companyId || '' }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (
+            data.status !== currentUser.companyStatus ||
+            data.next_payment_due !== currentUser.next_payment_due ||
+            data.trial_ends_at !== currentUser.trial_ends_at ||
+            data.plan !== currentUser.plan
+          ) {
+            const updatedUser = {
+              ...currentUser,
+              companyStatus: data.status,
+              next_payment_due: data.next_payment_due,
+              trial_ends_at: data.trial_ends_at,
+              plan: data.plan
+            };
+            localStorage.setItem('rastreae_user', JSON.stringify(updatedUser));
+            setCurrentUser(updatedUser);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to check company status periodically:", err);
+      }
+    };
+
+    // Check every 30 seconds
+    const interval = setInterval(checkStatus, 30000);
+
+    // Check on window focus
+    window.addEventListener('focus', checkStatus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', checkStatus);
+    };
+  }, [currentUser?.id, currentUser?.companyStatus]);
 
   const handleInstallClick = () => {
     if (!installPrompt) return;
