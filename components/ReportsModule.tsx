@@ -573,7 +573,8 @@ const ReceivablesList: React.FC<{ dateStart: string, dateEnd: string, formatCurr
             const all = await getAllOrders();
             const filtered = all.filter(o => {
                 const isQuote = o.currentStatus === OrderStatus.ORCAMENTO;
-                if (isQuote) return false;
+                const isGift = o.isGift || o.paymentMethod === 'Brinde / Patrocínio' || (o.paymentMethod && o.paymentMethod.toLowerCase().includes('brinde'));
+                if (isQuote || isGift) return false;
 
                 const balance = o.total - o.downPayment;
                 // Filter by delivery date for receivables

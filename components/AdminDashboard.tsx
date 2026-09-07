@@ -40,6 +40,8 @@ import {
   ArrowRight,
   LayoutDashboard,
   Wallet,
+  Gift,
+  ArrowUpDown,
 } from "lucide-react";
 import {
   Order,
@@ -207,6 +209,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [dateFilterField, setDateFilterField] = useState<
     "orderDate" | "estimatedDelivery"
   >("orderDate");
+  const [orderSort, setOrderSort] = useState<
+    "newest" | "oldest" | "alpha_asc" | "alpha_desc"
+  >("newest");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -369,8 +374,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return matchesSearch && matchesStatus && matchesTab && matchesDate;
   });
 
-  // Reverse to show newest first (Last 10 orders)
-  const sortedOrders = [...filteredOrders].reverse();
+  // Sorting logic (Newest, Oldest, Alphabetical A-Z, Alphabetical Z-A)
+  const sortedOrders = [...filteredOrders].sort((a, b) => {
+    if (orderSort === "alpha_asc") {
+      return a.customerName.localeCompare(b.customerName, "pt-BR", {
+        sensitivity: "base",
+      });
+    }
+    if (orderSort === "alpha_desc") {
+      return b.customerName.localeCompare(a.customerName, "pt-BR", {
+        sensitivity: "base",
+      });
+    }
+    return 0;
+  });
+
+  if (orderSort === "newest") {
+    sortedOrders.reverse();
+  }
 
   const totalPages = Math.ceil(sortedOrders.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -453,6 +474,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     notes: "",
     discount: 0,
     discountType: "fixed",
+    isGift: false,
   });
 
   // Item Editing State
@@ -477,6 +499,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newSubItem, setNewSubItem] = useState({ name: "", size: "" });
 
   const resetOrderForm = () => {
+    const isQuoteTab = activeTab === "quotes";
     setOrderForm({
       customerName: "",
       customerPhone: "",
@@ -491,11 +514,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       pressingDate: "",
       printingDate: "",
       seamstress: "",
-      isQuote: activeTab === "quotes", // Default to true if in quotes tab
+      isQuote: isQuoteTab, // Default to true if in quotes tab
       quoteValidity: "",
-      notes: "",
+      notes: isQuoteTab ? (appSettings.defaultQuoteObservations || "") : "",
       discount: 0,
       discountType: "fixed",
+      isGift: false,
     });
     setTempItem({
       name: "",
@@ -566,6 +590,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       notes: fullOrder.notes || "",
       discount: fullOrder.discount || 0,
       discountType: fullOrder.discountType || "fixed",
+      isGift: !!fullOrder.isGift || fullOrder.paymentMethod === "Brinde / Patrocínio",
     });
     setIsEditingFullOrder(fullOrder.id);
     setShowOrderModal(true);
@@ -587,13 +612,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
     }
 
+    const isGift = !!fullOrder.isGift || fullOrder.paymentMethod === "Brinde / Patrocínio";
     setOrderForm({
       customerName: fullOrder.customerName,
       customerPhone: fullOrder.customerPhone,
       shippingAddress: fullOrder.shippingAddress,
       orderDate: new Date().toISOString().split("T")[0], // Data de hoje
       estimatedDelivery: "", // Limpa previsão
-      paymentMethod: "Pix", // Reset financeiro
+      paymentMethod: isGift ? "Brinde / Patrocínio" : "Pix", // Reset financeiro
       downPayment: 0, // Reset financeiro
       downPaymentAccountId: "",
       photos: fullOrder.photos || [],
@@ -614,6 +640,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       notes: fullOrder.notes || "",
       discount: fullOrder.discount || 0,
       discountType: fullOrder.discountType || "fixed",
+      isGift: isGift,
     });
     setIsEditingFullOrder(null); // Trata como um NOVO pedido
     setShowOrderModal(true);
@@ -769,16 +796,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     const total = Math.max(0, subtotal - discountAmount);
 
-    if (orderForm.downPayment > total) {
-      alert(
-        "O valor de entrada não pode ser maior que o valor total (com desconto).",
-      );
-      return;
-    }
+    const isGift = orderForm.isGift || orderForm.paymentMethod === "Brinde / Patrocínio";
 
-    if (orderForm.downPayment > 0 && !orderForm.downPaymentAccountId) {
-      alert("Por favor, selecione a conta para o recebimento da entrada.");
-      return;
+    if (!isGift) {
+      if (orderForm.downPayment > total) {
+        alert(
+          "O valor de entrada não pode ser maior que o valor total (com desconto).",
+        );
+        return;
+      }
+
+      if (orderForm.downPayment > 0 && !orderForm.downPaymentAccountId) {
+        alert("Por favor, selecione a conta para o recebimento da entrada.");
+        return;
+      }
     }
 
     // Helper to format money for saving
@@ -788,7 +819,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         currency: "BRL",
       }).format(val);
 
-    let finalOrderForm = { ...orderForm, total };
+    let finalOrderForm = {
+      ...orderForm,
+      total,
+      isGift: isGift,
+      paymentMethod: isGift ? "Brinde / Patrocínio" : orderForm.paymentMethod,
+      downPayment: isGift ? 0 : orderForm.downPayment,
+      downPaymentAccountId: isGift ? undefined : orderForm.downPaymentAccountId,
+    };
 
     // Se for criação de novo pedido E tiver entrada, enviamos o método sem precisar formatar com parênteses, para manter o padrão
 
@@ -1175,9 +1213,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           .info-group { margin-bottom: 3px; }
           .label { font-weight: 600; color: #374151; font-size: 12px; }
           .value { color: #111827; font-size: 13px; }
-          .photos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 5px; }
-          .photo-container { border: 1px solid #e5e7eb; border-radius: 4px; overflow: hidden; height: 100px; background: #f9fafb; display: flex; align-items: center; justify-content: center; }
+          .photos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 8px; }
+          .photo-container { border: 1.5px solid #d1d5db; border-radius: 6px; overflow: hidden; height: 180px; background: #ffffff; display: flex; align-items: center; justify-content: center; padding: 4px; box-sizing: border-box; }
           .photo-container img { width: 100%; height: 100%; object-fit: contain; }
+          .checkbox-box { width: 18px; height: 18px; border: 1.5px solid #374151; border-radius: 3px; margin: 0 auto; background: #ffffff; display: block; }
           table { width: 100%; border-collapse: collapse; margin-top: 5px; }
           th { background-color: #f3f4f6; text-align: left; padding: 5px; font-size: 11px; font-weight: bold; color: #4b5563; border-bottom: 1px solid #e5e7eb; }
           td { padding: 5px; border-bottom: 1px solid #f3f4f6; font-size: 12px; color: #1f2937; }
@@ -1261,6 +1300,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <th>Produto</th>
                 <th class="text-center">Tamanho</th>
                 <th class="text-center">Qtd</th>
+                <th class="text-center" style="width: 90px; font-size: 10px;">Conf. Impressão</th>
+                <th class="text-center" style="width: 90px; font-size: 10px;">Conf. Costura</th>
                 ${
                   isQuote
                     ? `
@@ -1289,7 +1330,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     }
                   </td>
                   <td class="text-center">${item.isSet ? "-" : item.size || "-"}</td>
-                  <td class="text-center">${item.quantity}</td>
+                  <td class="text-center" style="font-weight: bold;">${item.quantity}</td>
+                  <td class="text-center" style="vertical-align: middle;"><span class="checkbox-box"></span></td>
+                  <td class="text-center" style="vertical-align: middle;"><span class="checkbox-box"></span></td>
                   ${
                     isQuote
                       ? `
@@ -1741,6 +1784,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     )}
                   </select>
                 </div>
+
+                {/* Order Sort */}
+                <div className="w-full md:w-56">
+                  <select
+                    className="w-full h-full border border-gray-200 rounded-xl px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-sm text-sm"
+                    value={orderSort}
+                    onChange={(e) => {
+                      setOrderSort(e.target.value as any);
+                      setCurrentPage(1);
+                    }}
+                    title="Ordenação da listagem"
+                  >
+                    <option value="newest">Mais Recentes</option>
+                    <option value="oldest">Mais Antigos</option>
+                    <option value="alpha_asc">Ordem Alfabética (A-Z)</option>
+                    <option value="alpha_desc">Ordem Alfabética (Z-A)</option>
+                  </select>
+                </div>
               </div>
 
               {/* Date Filters */}
@@ -1827,7 +1888,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         ID
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Cliente
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOrderSort((prev) =>
+                              prev === "alpha_asc" ? "alpha_desc" : "alpha_asc",
+                            );
+                            setCurrentPage(1);
+                          }}
+                          className="flex items-center gap-1.5 hover:text-primary transition font-semibold group cursor-pointer"
+                          title="Clique para ordenar por ordem alfabética"
+                        >
+                          <span>Cliente</span>
+                          <ArrowUpDown
+                            size={13}
+                            className={
+                              orderSort.startsWith("alpha")
+                                ? "text-primary font-bold"
+                                : "text-gray-400 group-hover:text-gray-600"
+                            }
+                          />
+                          {orderSort === "alpha_asc" && (
+                            <span className="text-[10px] text-primary lowercase font-normal">
+                              (A-Z)
+                            </span>
+                          )}
+                          {orderSort === "alpha_desc" && (
+                            <span className="text-[10px] text-primary lowercase font-normal">
+                              (Z-A)
+                            </span>
+                          )}
+                        </button>
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Datas
@@ -1892,20 +1983,68 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {getStatusBadge(order.currentStatus)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <div>
-                              Total:{" "}
-                              {new Intl.NumberFormat("pt-BR", {
-                                style: "currency",
-                                currency: "BRL",
-                              }).format(order.total)}
-                            </div>
-                            {order.downPayment > 0 && (
-                              <div className="text-xs text-green-600">
-                                Pago:{" "}
-                                {new Intl.NumberFormat("pt-BR", {
-                                  style: "currency",
-                                  currency: "BRL",
-                                }).format(order.downPayment)}
+                            {order.isGift || order.paymentMethod === "Brinde / Patrocínio" ? (
+                              <div>
+                                <div className="font-semibold text-gray-900">
+                                  Total:{" "}
+                                  {new Intl.NumberFormat("pt-BR", {
+                                    style: "currency",
+                                    currency: "BRL",
+                                  }).format(order.total)}
+                                </div>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 mt-1">
+                                  Brinde / Patrocínio
+                                </span>
+                              </div>
+                            ) : (
+                              <div>
+                                <div>
+                                  Total:{" "}
+                                  {new Intl.NumberFormat("pt-BR", {
+                                    style: "currency",
+                                    currency: "BRL",
+                                  }).format(order.total)}
+                                </div>
+                                {activeTab === "orders" ? (
+                                  <>
+                                    <div
+                                      className={`text-xs ${order.downPayment > 0 ? "text-green-600 font-medium" : "text-gray-500"}`}
+                                    >
+                                      Pago:{" "}
+                                      {new Intl.NumberFormat("pt-BR", {
+                                        style: "currency",
+                                        currency: "BRL",
+                                      }).format(order.downPayment || 0)}
+                                    </div>
+                                    {(() => {
+                                      const remaining = Math.max(
+                                        0,
+                                        order.total - (order.downPayment || 0),
+                                      );
+                                      return (
+                                        <div
+                                          className={`text-xs ${remaining > 0.01 ? "text-red-600 font-semibold" : "text-green-700 font-medium"}`}
+                                        >
+                                          Restante:{" "}
+                                          {new Intl.NumberFormat("pt-BR", {
+                                            style: "currency",
+                                            currency: "BRL",
+                                          }).format(remaining)}
+                                        </div>
+                                      );
+                                    })()}
+                                  </>
+                                ) : (
+                                  order.downPayment > 0 && (
+                                    <div className="text-xs text-green-600">
+                                      Pago:{" "}
+                                      {new Intl.NumberFormat("pt-BR", {
+                                        style: "currency",
+                                        currency: "BRL",
+                                      }).format(order.downPayment)}
+                                    </div>
+                                  )
+                                )}
                               </div>
                             )}
                           </td>
@@ -2229,6 +2368,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     }
                     placeholder="Ex: Rua das Flores, 123 - Centro"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Texto Padrão para Observações do Orçamento
+                  </label>
+                  <textarea
+                    rows={4}
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                    value={settingsForm.defaultQuoteObservations || ""}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        defaultQuoteObservations: e.target.value,
+                      })
+                    }
+                    placeholder="Ex: Condições de pagamento: 50% de entrada e 50% na retirada. Validade da proposta: 15 dias."
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Este texto aparecerá automaticamente no campo de observações ao criar um novo orçamento, podendo ser alterado na hora.
+                  </p>
                 </div>
 
                 <div>
@@ -2839,23 +2999,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               {/* Financeiro */}
               <div className="border-t border-gray-100 pt-4">
-                <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                  <DollarSign size={18} /> Financeiro
-                </h4>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <DollarSign size={18} /> Financeiro
+                  </h4>
+                  <label className="inline-flex items-center gap-2 text-sm text-purple-700 font-medium cursor-pointer bg-purple-50 px-3 py-1.5 rounded-lg border border-purple-200 hover:bg-purple-100 transition">
+                    <input
+                      type="checkbox"
+                      checked={!!orderForm.isGift || orderForm.paymentMethod === "Brinde / Patrocínio"}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setOrderForm({
+                          ...orderForm,
+                          isGift: checked,
+                          paymentMethod: checked ? "Brinde / Patrocínio" : "Pix",
+                          downPayment: 0,
+                          downPaymentAccountId: "",
+                        });
+                      }}
+                      className="rounded text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer"
+                    />
+                    <span>Brinde / Patrocínio (Sem cobrança)</span>
+                  </label>
+                </div>
+
+                {(orderForm.isGift || orderForm.paymentMethod === "Brinde / Patrocínio") && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-3.5 mb-4 text-sm text-purple-900 flex items-start gap-3">
+                    <div className="p-1.5 bg-purple-200 text-purple-800 rounded-md mt-0.5">
+                      <Gift size={16} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-purple-900">
+                        Pedido identificado como Brinde / Patrocínio
+                      </p>
+                      <p className="text-xs text-purple-700 mt-0.5">
+                        Os campos de pagamento foram desativados. Este pedido não gerará transações financeiras nem será contabilizado no Contas a Receber.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Forma de Pagamento (Entrada)
                     </label>
                     <select
-                      className="w-full border border-gray-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-primary focus:outline-none"
+                      disabled={!!orderForm.isGift || orderForm.paymentMethod === "Brinde / Patrocínio"}
+                      className={`w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none transition ${
+                        orderForm.isGift || orderForm.paymentMethod === "Brinde / Patrocínio"
+                          ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+                          : "bg-white border-gray-300 text-gray-800"
+                      }`}
                       value={orderForm.paymentMethod}
-                      onChange={(e) =>
-                        setOrderForm({
-                          ...orderForm,
-                          paymentMethod: e.target.value,
-                        })
-                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "Brinde / Patrocínio") {
+                          setOrderForm({
+                            ...orderForm,
+                            paymentMethod: "Brinde / Patrocínio",
+                            isGift: true,
+                            downPayment: 0,
+                            downPaymentAccountId: "",
+                          });
+                        } else {
+                          setOrderForm({
+                            ...orderForm,
+                            paymentMethod: val,
+                            isGift: false,
+                          });
+                        }
+                      }}
                     >
                       <option value="Pix">Pix</option>
                       <option value="Dinheiro">Dinheiro</option>
@@ -2864,6 +3078,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </option>
                       <option value="Cartão de Débito">Cartão de Débito</option>
                       <option value="Boleto">Boleto</option>
+                      <option value="Brinde / Patrocínio">Brinde / Patrocínio</option>
                     </select>
                   </div>
                   <div>
@@ -2872,8 +3087,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </label>
                     <input
                       type="number"
-                      className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
-                      value={orderForm.downPayment}
+                      disabled={!!orderForm.isGift || orderForm.paymentMethod === "Brinde / Patrocínio"}
+                      className={`w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-primary focus:outline-none transition ${
+                        orderForm.isGift || orderForm.paymentMethod === "Brinde / Patrocínio"
+                          ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+                          : "bg-white border-gray-300 text-gray-800"
+                      }`}
+                      value={orderForm.isGift || orderForm.paymentMethod === "Brinde / Patrocínio" ? "" : orderForm.downPayment}
+                      placeholder={orderForm.isGift || orderForm.paymentMethod === "Brinde / Patrocínio" ? "Isento (Brinde)" : "0.00"}
                       onChange={(e) =>
                         setOrderForm({
                           ...orderForm,
@@ -2882,7 +3103,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       }
                     />
                   </div>
-                  {orderForm.downPayment > 0 && (
+                  {orderForm.downPayment > 0 && !orderForm.isGift && orderForm.paymentMethod !== "Brinde / Patrocínio" && (
                     <div className="col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Conta para Recebimento da Entrada

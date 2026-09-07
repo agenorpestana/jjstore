@@ -198,7 +198,8 @@ async function initDatabase() {
        "ALTER TABLE financial_accounts ADD COLUMN active BOOLEAN DEFAULT TRUE",
        "ALTER TABLE financial_accounts ADD COLUMN initial_balance DECIMAL(10, 2) DEFAULT 0",
        "ALTER TABLE financial_accounts ADD COLUMN initial_balance_date VARCHAR(20)",
-       "ALTER TABLE order_items ADD COLUMN is_set BOOLEAN DEFAULT FALSE"
+       "ALTER TABLE order_items ADD COLUMN is_set BOOLEAN DEFAULT FALSE",
+       "ALTER TABLE orders ADD COLUMN is_gift BOOLEAN DEFAULT FALSE"
     ];
 
     for (const query of migrationQueries) {
@@ -777,11 +778,11 @@ app.get('/api/settings', async (req, res) => {
             query += ' WHERE company_id = ?';
             params.push(companyId);
         } else {
-            return res.json({ appName: 'Rastreaê', logoUrl: '', businessName: '', cnpj: '', city: '', address: '' });
+            return res.json({ appName: 'Rastreaê', logoUrl: '', businessName: '', cnpj: '', city: '', address: '', defaultQuoteObservations: '' });
         }
 
         const [rows] = await pool.query(query, params);
-        const settings = { appName: 'Rastreaê', logoUrl: '', businessName: '', cnpj: '', city: '', address: '' };
+        const settings = { appName: 'Rastreaê', logoUrl: '', businessName: '', cnpj: '', city: '', address: '', defaultQuoteObservations: '' };
         rows.forEach(row => {
             if (row.setting_key === 'appName') settings.appName = row.setting_value;
             if (row.setting_key === 'logoUrl') settings.logoUrl = row.setting_value;
@@ -789,6 +790,7 @@ app.get('/api/settings', async (req, res) => {
             if (row.setting_key === 'cnpj') settings.cnpj = row.setting_value;
             if (row.setting_key === 'city') settings.city = row.setting_value;
             if (row.setting_key === 'address') settings.address = row.setting_value;
+            if (row.setting_key === 'defaultQuoteObservations') settings.defaultQuoteObservations = row.setting_value;
         });
         res.json(settings);
     } catch (err) {
@@ -802,7 +804,7 @@ app.post('/api/settings', async (req, res) => {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(401).json({ error: 'Company ID required' });
 
-        const { appName, logoUrl, businessName, cnpj, city, address } = req.body;
+        const { appName, logoUrl, businessName, cnpj, city, address, defaultQuoteObservations } = req.body;
         
         const upsert = async (key, val) => {
              await pool.query('INSERT INTO app_settings (setting_key, setting_value, company_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = ?', [key, val, companyId, val]);
@@ -814,6 +816,7 @@ app.post('/api/settings', async (req, res) => {
         await upsert('cnpj', cnpj || '');
         await upsert('city', city || '');
         await upsert('address', address || '');
+        await upsert('defaultQuoteObservations', defaultQuoteObservations || '');
         
         res.json({ message: 'Settings updated' });
     } catch (err) {
@@ -873,6 +876,7 @@ app.get('/api/orders', async (req, res) => {
         photos: [], // Lista vazia na listagem
         discount: parseFloat(order.discount || 0),
         discountType: order.discountType || 'fixed',
+        isGift: !!order.is_gift || order.paymentMethod === 'Brinde / Patrocínio',
         // Mapeamento correto para o Frontend
         quoteValidity: order.quote_validity,
         notes: order.notes
@@ -934,6 +938,7 @@ app.get('/api/orders/:id', async (req, res) => {
       photos: photos.map(p => p.photo_data),
       discount: parseFloat(order.discount || 0),
       discountType: order.discountType || 'fixed',
+      isGift: !!order.is_gift || order.paymentMethod === 'Brinde / Patrocínio',
       // Mapeamento correto para o Frontend
       quoteValidity: order.quote_validity,
       notes: order.notes
@@ -956,10 +961,12 @@ app.post('/api/orders', async (req, res) => {
     await conn.beginTransaction();
     const order = req.body;
 
+    const isGift = order.isGift || order.paymentMethod === 'Brinde / Patrocínio';
+
     await conn.query(
-      `INSERT INTO orders (id, company_id, customerName, customerPhone, orderDate, estimatedDelivery, total, downPayment, paymentMethod, shippingAddress, pressingDate, printingDate, seamstress, currentStatus, quote_validity, notes, discount, discountType)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [order.id, companyId, order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.currentStatus, order.quoteValidity, order.notes, order.discount || 0, order.discountType || 'fixed']
+      `INSERT INTO orders (id, company_id, customerName, customerPhone, orderDate, estimatedDelivery, total, downPayment, paymentMethod, shippingAddress, pressingDate, printingDate, seamstress, currentStatus, quote_validity, notes, discount, discountType, is_gift)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [order.id, companyId, order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, isGift ? 0 : order.downPayment, isGift ? 'Brinde / Patrocínio' : order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.currentStatus, order.quoteValidity, order.notes, order.discount || 0, order.discountType || 'fixed', isGift ? 1 : 0]
     );
 
     if (order.items && order.items.length > 0) {
@@ -1037,9 +1044,11 @@ app.put('/api/orders/:id', async (req, res) => {
     const [currentRows] = await conn.query('SELECT downPayment FROM orders WHERE id = ?', [orderId]);
     const oldDownPayment = currentRows.length > 0 ? parseFloat(currentRows[0].downPayment || 0) : 0;
 
+    const isGift = order.isGift || order.paymentMethod === 'Brinde / Patrocínio';
+
     await conn.query(
-      `UPDATE orders SET customerName=?, customerPhone=?, orderDate=?, estimatedDelivery=?, total=?, downPayment=?, paymentMethod=?, shippingAddress=?, pressingDate=?, printingDate=?, seamstress=?, quote_validity=?, notes=?, discount=?, discountType=? WHERE id=?`,
-      [order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, order.downPayment, order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.quoteValidity, order.notes, order.discount || 0, order.discountType || 'fixed', orderId]
+      `UPDATE orders SET customerName=?, customerPhone=?, orderDate=?, estimatedDelivery=?, total=?, downPayment=?, paymentMethod=?, shippingAddress=?, pressingDate=?, printingDate=?, seamstress=?, quote_validity=?, notes=?, discount=?, discountType=?, is_gift=? WHERE id=?`,
+      [order.customerName, order.customerPhone, order.orderDate, order.estimatedDelivery, order.total, isGift ? 0 : order.downPayment, isGift ? 'Brinde / Patrocínio' : order.paymentMethod, order.shippingAddress, order.pressingDate, order.printingDate, order.seamstress, order.quoteValidity, order.notes, order.discount || 0, order.discountType || 'fixed', isGift ? 1 : 0, orderId]
     );
 
     // Handle downPayment as a transaction if it's new or changed
@@ -1907,8 +1916,8 @@ app.get('/api/dashboard', async (req, res) => {
         const [transExpenses] = await pool.query('SELECT SUM(amount) as total FROM finance_transactions WHERE company_id = ? AND type = "expense"', [companyId]);
         const totalExpenses = parseFloat(transExpenses[0].total) || 0;
 
-        // 3. Receivable (Total orders - downPayment)
-        const [receivableRows] = await pool.query('SELECT SUM(total - downPayment) as total FROM orders WHERE company_id = ? AND currentStatus != "CANCELADO" AND currentStatus != "ORCAMENTO"', [companyId]);
+        // 3. Receivable (Total orders - downPayment, excluding gifts/sponsorships)
+        const [receivableRows] = await pool.query('SELECT SUM(total - downPayment) as total FROM orders WHERE company_id = ? AND currentStatus != "CANCELADO" AND currentStatus != "ORCAMENTO" AND paymentMethod != "Brinde / Patrocínio" AND (is_gift IS NULL OR is_gift = 0)', [companyId]);
         const totalReceivable = parseFloat(receivableRows[0].total) || 0;
 
         // 4. Payment methods distribution (from transactions) - Current Month

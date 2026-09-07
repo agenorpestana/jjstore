@@ -127,9 +127,15 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
          </div>
          
          <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-             <div className="flex justify-between">
+             <div className="flex justify-between items-center">
                  <span className="text-gray-600">Forma de Pagamento</span>
-                 <span className="text-gray-900 font-medium">{order.paymentMethod || 'Não informada'}</span>
+                 {order.isGift || order.paymentMethod === 'Brinde / Patrocínio' ? (
+                     <span className="bg-purple-100 text-purple-800 text-xs px-2.5 py-1 rounded-full font-bold">
+                         Brinde / Patrocínio (Sem cobrança)
+                     </span>
+                 ) : (
+                     <span className="text-gray-900 font-medium">{order.paymentMethod || 'Não informada'}</span>
+                 )}
              </div>
              <div className="border-t border-gray-200 my-2"></div>
              <div className="flex justify-between">

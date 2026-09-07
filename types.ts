@@ -60,6 +60,7 @@ export interface Order {
   downPaymentAccountId?: string;
   discount?: number;
   discountType?: 'percentage' | 'fixed';
+  isGift?: boolean;
 }
 
 export interface NewOrderInput {
@@ -82,6 +83,7 @@ export interface NewOrderInput {
   notes?: string;
   discount?: number;
   discountType?: 'percentage' | 'fixed';
+  isGift?: boolean;
 }
 
 export interface Transaction {
@@ -159,6 +161,7 @@ export interface AppSettings {
   cnpj?: string;
   city?: string;
   address?: string;
+  defaultQuoteObservations?: string;
 }
 
 export interface Plan {
