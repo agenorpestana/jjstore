@@ -719,6 +719,7 @@ export const createPOSSale = async (sale: {
     discountType: 'percentage' | 'fixed';
     total: number;
     paymentMethod: string;
+    payments?: Array<{ method: string; amount: number }>;
     amountPaid?: number;
     changeAmount?: number;
     sellerName?: string;

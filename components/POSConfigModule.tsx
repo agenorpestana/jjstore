@@ -21,7 +21,8 @@ import {
   Lock,
   RefreshCw,
   Eye,
-  Sliders
+  Sliders,
+  Split
 } from 'lucide-react';
 import { POSProduct, POSCustomer, POSSale, POSSaleItem } from '../types';
 import { 
@@ -755,9 +756,20 @@ export const POSConfigModule: React.FC<POSConfigModuleProps> = ({ onOpenPOS }) =
                             {sale.customerName}
                           </td>
                           <td className="px-5 py-3.5">
-                            <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold">
-                              {sale.paymentMethod}
-                            </span>
+                            {sale.payments && sale.payments.length > 1 ? (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-md text-[11px] font-bold">
+                                  <Split size={11} /> Múltiplo ({sale.payments.length})
+                                </span>
+                                <div className="text-[10px] text-gray-500 truncate max-w-[180px]" title={sale.paymentMethod}>
+                                  {sale.payments.map(p => `${p.method}: ${formatCurrency(p.amount)}`).join(' • ')}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold">
+                                {sale.paymentMethod}
+                              </span>
+                            )}
                           </td>
                           <td className="px-5 py-3.5 text-gray-600 text-xs">
                             {sale.sellerName || '-'}
@@ -1204,12 +1216,26 @@ export const POSConfigModule: React.FC<POSConfigModuleProps> = ({ onOpenPOS }) =
 
               {/* Payment Info */}
               <div className="space-y-1 text-[11px]">
-                <div className="flex justify-between">
-                  <span>FORMA DE PAGTO:</span>
-                  <span className="font-bold">{selectedSaleForView.paymentMethod}</span>
-                </div>
-                {selectedSaleForView.amountPaid && selectedSaleForView.amountPaid > 0 && (
+                {selectedSaleForView.payments && selectedSaleForView.payments.length > 1 ? (
+                  <div className="space-y-1">
+                    <div className="font-bold text-gray-700">FORMAS DE PAGAMENTO:</div>
+                    <div className="pl-1.5 space-y-0.5 border-l-2 border-emerald-500">
+                      {selectedSaleForView.payments.map((p, idx) => (
+                        <div key={idx} className="flex justify-between">
+                          <span>• {p.method}:</span>
+                          <span className="font-bold">{formatCurrency(p.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
                   <div className="flex justify-between">
+                    <span>FORMA DE PAGTO:</span>
+                    <span className="font-bold">{selectedSaleForView.paymentMethod}</span>
+                  </div>
+                )}
+                {selectedSaleForView.amountPaid && selectedSaleForView.amountPaid > 0 && (
+                  <div className="flex justify-between pt-0.5">
                     <span>VALOR RECEBIDO:</span>
                     <span>{formatCurrency(selectedSaleForView.amountPaid)}</span>
                   </div>

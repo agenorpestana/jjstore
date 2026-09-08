@@ -234,6 +234,12 @@ export interface POSSaleItem {
   totalPrice: number;
 }
 
+export interface POSSalePayment {
+  id?: string;
+  method: string;
+  amount: number;
+}
+
 export interface POSSale {
   id: string;
   companyId: string;
@@ -244,6 +250,7 @@ export interface POSSale {
   discountType: 'percentage' | 'fixed';
   total: number;
   paymentMethod: string;
+  payments?: POSSalePayment[];
   amountPaid?: number;
   changeAmount?: number;
   accountId?: string;

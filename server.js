@@ -206,7 +206,8 @@ async function initDatabase() {
         discount DECIMAL(10, 2) DEFAULT 0,
         discount_type VARCHAR(20) DEFAULT 'fixed',
         total DECIMAL(10, 2) DEFAULT 0,
-        payment_method VARCHAR(100),
+        payment_method VARCHAR(255),
+        payments TEXT,
         amount_paid DECIMAL(10, 2) DEFAULT 0,
         change_amount DECIMAL(10, 2) DEFAULT 0,
         account_id VARCHAR(50),
@@ -264,7 +265,9 @@ async function initDatabase() {
        "ALTER TABLE order_items ADD COLUMN is_set BOOLEAN DEFAULT FALSE",
        "ALTER TABLE orders ADD COLUMN is_gift BOOLEAN DEFAULT FALSE",
        "ALTER TABLE companies ADD COLUMN pos_enabled BOOLEAN DEFAULT FALSE",
-       "ALTER TABLE financial_accounts ADD COLUMN pos_payment_methods TEXT"
+       "ALTER TABLE financial_accounts ADD COLUMN pos_payment_methods TEXT",
+       "ALTER TABLE pos_sales ADD COLUMN payments TEXT",
+       "ALTER TABLE pos_sales MODIFY COLUMN payment_method VARCHAR(255)"
     ];
 
     for (const query of migrationQueries) {
@@ -2313,26 +2316,37 @@ app.get('/api/pos/sales', async (req, res) => {
             });
         }
         
-        res.json(sales.map(s => ({
-            id: s.id,
-            companyId: s.company_id,
-            customerId: s.customer_id,
-            customerName: s.customer_name,
-            subtotal: parseFloat(s.subtotal || 0),
-            discount: parseFloat(s.discount || 0),
-            discountType: s.discount_type || 'fixed',
-            total: parseFloat(s.total || 0),
-            paymentMethod: s.payment_method,
-            amountPaid: parseFloat(s.amount_paid || 0),
-            changeAmount: parseFloat(s.change_amount || 0),
-            accountId: s.account_id,
-            accountName: s.accountName || 'Caixa Administrativo',
-            sellerName: s.seller_name,
-            notes: s.notes,
-            status: s.status,
-            createdAt: s.created_at,
-            items: itemsBySale[s.id] || []
-        })));
+        res.json(sales.map(s => {
+            let parsedPayments = null;
+            if (s.payments) {
+                try {
+                    parsedPayments = typeof s.payments === 'string' ? JSON.parse(s.payments) : s.payments;
+                } catch(e) {
+                    parsedPayments = null;
+                }
+            }
+            return {
+                id: s.id,
+                companyId: s.company_id,
+                customerId: s.customer_id,
+                customerName: s.customer_name,
+                subtotal: parseFloat(s.subtotal || 0),
+                discount: parseFloat(s.discount || 0),
+                discountType: s.discount_type || 'fixed',
+                total: parseFloat(s.total || 0),
+                paymentMethod: s.payment_method,
+                payments: Array.isArray(parsedPayments) ? parsedPayments : null,
+                amountPaid: parseFloat(s.amount_paid || 0),
+                changeAmount: parseFloat(s.change_amount || 0),
+                accountId: s.account_id,
+                accountName: s.accountName || 'Caixa Administrativo',
+                sellerName: s.seller_name,
+                notes: s.notes,
+                status: s.status,
+                createdAt: s.created_at,
+                items: itemsBySale[s.id] || []
+            };
+        }));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -2354,6 +2368,7 @@ app.post('/api/pos/sales', async (req, res) => {
             discountType,
             total,
             paymentMethod,
+            payments,
             amountPaid,
             changeAmount,
             sellerName,
@@ -2369,47 +2384,55 @@ app.post('/api/pos/sales', async (req, res) => {
         const saleId = `PDV-${Date.now()}`;
         const saleTotal = parseFloat(total || 0);
 
-        // 1. Descobrir qual conta bancária deve receber o valor da venda
-        let targetAccountId = null;
+        // Busca todas as contas ativas da empresa para direcionar pagamentos
+        const [allAccounts] = await conn.query(
+            'SELECT id, name, pos_payment_methods, is_default FROM financial_accounts WHERE company_id = ? AND active = TRUE',
+            [companyId]
+        );
+        const defaultAcc = allAccounts.find(a => a.is_default) || allAccounts[0] || null;
 
-        // Se a forma for dinheiro -> CAIXA ADMINISTRATIVO (padrão)
-        if (paymentMethod === 'Dinheiro') {
-            const [defAcc] = await conn.query('SELECT id FROM financial_accounts WHERE company_id = ? AND is_default = TRUE LIMIT 1', [companyId]);
-            if (defAcc.length > 0) targetAccountId = defAcc[0].id;
-        } else {
-            // Verifica contas ativas vinculadas a esta forma de pagamento
-            const [accounts] = await conn.query('SELECT id, pos_payment_methods, is_default FROM financial_accounts WHERE company_id = ? AND active = TRUE', [companyId]);
-            for (const acc of accounts) {
+        // Função para encontrar a conta destino de um método de pagamento específico
+        const findAccountForMethod = (method) => {
+            if (method === 'Dinheiro') {
+                // Se dinheiro, preferência à conta padrão
+                return defaultAcc ? defaultAcc.id : null;
+            }
+            // Procura conta que tenha esse método configurado
+            for (const acc of allAccounts) {
                 if (acc.pos_payment_methods) {
                     try {
                         const methods = typeof acc.pos_payment_methods === 'string' ? JSON.parse(acc.pos_payment_methods) : acc.pos_payment_methods;
-                        if (Array.isArray(methods) && methods.includes(paymentMethod)) {
-                            targetAccountId = acc.id;
-                            break;
+                        if (Array.isArray(methods) && methods.includes(method)) {
+                            return acc.id;
                         }
                     } catch(e) {}
                 }
             }
-            // Se nenhuma conta estiver especificamente vinculada, cai na conta padrão
-            if (!targetAccountId) {
-                const defaultAcc = accounts.find(a => a.is_default);
-                if (defaultAcc) targetAccountId = defaultAcc.id;
-            }
+            return defaultAcc ? defaultAcc.id : null;
+        };
+
+        // Trata os pagamentos (múltiplos ou único)
+        const hasMultiplePayments = Array.isArray(payments) && payments.length > 0;
+        const normalizedPayments = hasMultiplePayments 
+            ? payments.map(p => ({ method: p.method || 'Dinheiro', amount: parseFloat(p.amount || 0) })).filter(p => p.amount > 0)
+            : [{ method: paymentMethod || 'Dinheiro', amount: saleTotal }];
+
+        // Cria resumo textual das formas de pagamento
+        let summaryPaymentMethod = '';
+        if (normalizedPayments.length === 1) {
+            summaryPaymentMethod = normalizedPayments[0].method;
+        } else {
+            summaryPaymentMethod = normalizedPayments.map(p => `${p.method}: R$ ${p.amount.toFixed(2)}`).join(', ');
         }
 
-        // Se ainda não tiver conta (caso de segurança), busca a primeira existente
-        if (!targetAccountId) {
-            const [fallbackAcc] = await conn.query('SELECT id FROM financial_accounts WHERE company_id = ? LIMIT 1', [companyId]);
-            if (fallbackAcc.length > 0) targetAccountId = fallbackAcc[0].id;
-        }
-
-        const transactionId = `TX-${saleId}`;
+        const primaryAccountId = findAccountForMethod(normalizedPayments[0]?.method);
+        const primaryTransactionId = `TX-${saleId}`;
 
         // 2. Inserir a venda
         await conn.query(
             `INSERT INTO pos_sales 
-            (id, company_id, customer_id, customer_name, subtotal, discount, discount_type, total, payment_method, amount_paid, change_amount, account_id, transaction_id, seller_name, notes, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (id, company_id, customer_id, customer_name, subtotal, discount, discount_type, total, payment_method, payments, amount_paid, change_amount, account_id, transaction_id, seller_name, notes, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 saleId,
                 companyId,
@@ -2419,11 +2442,12 @@ app.post('/api/pos/sales', async (req, res) => {
                 parseFloat(discount || 0),
                 discountType || 'fixed',
                 saleTotal,
-                paymentMethod,
+                summaryPaymentMethod,
+                JSON.stringify(normalizedPayments),
                 parseFloat(amountPaid || saleTotal),
                 parseFloat(changeAmount || 0),
-                targetAccountId,
-                transactionId,
+                primaryAccountId,
+                primaryTransactionId,
                 sellerName || null,
                 notes || null,
                 'COMPLETED'
@@ -2453,27 +2477,40 @@ app.post('/api/pos/sales', async (req, res) => {
             }
         }
 
-        // 4. Integração Financeira: Cria lançamento em finance_transactions e atualiza saldo
-        if (saleTotal > 0 && targetAccountId) {
-            const todayStr = new Date().toISOString().split('T')[0];
-            await conn.query(
-                `INSERT INTO finance_transactions (id, company_id, type, description, amount, date, paymentMethod, account_id)
-                 VALUES (?, ?, 'revenue', ?, ?, ?, ?, ?)`,
-                [
-                    transactionId,
-                    companyId,
-                    `Venda PDV #${saleId} - ${customerName || 'CONSUMIDOR FINAL'}`,
-                    saleTotal,
-                    todayStr,
-                    paymentMethod,
-                    targetAccountId
-                ]
-            );
+        // 4. Integração Financeira: Cria lançamento em finance_transactions e atualiza saldo para CADA forma de pagamento
+        const todayStr = new Date().toISOString().split('T')[0];
+        for (let i = 0; i < normalizedPayments.length; i++) {
+            const p = normalizedPayments[i];
+            const pAmount = parseFloat(p.amount || 0);
+            if (pAmount <= 0) continue;
 
-            await conn.query(
-                'UPDATE financial_accounts SET balance = balance + ? WHERE id = ? AND company_id = ?',
-                [saleTotal, targetAccountId, companyId]
-            );
+            const targetAccId = findAccountForMethod(p.method);
+            const txId = normalizedPayments.length > 1 ? `TX-${saleId}-${i + 1}` : primaryTransactionId;
+            const desc = normalizedPayments.length > 1 
+                ? `Venda PDV #${saleId} [${p.method}] - ${customerName || 'CONSUMIDOR FINAL'}`
+                : `Venda PDV #${saleId} - ${customerName || 'CONSUMIDOR FINAL'}`;
+
+            if (targetAccId) {
+                await conn.query(
+                    `INSERT INTO finance_transactions (id, company_id, type, description, amount, date, paymentMethod, account_id, order_id)
+                     VALUES (?, ?, 'revenue', ?, ?, ?, ?, ?, ?)`,
+                    [
+                        txId,
+                        companyId,
+                        desc,
+                        pAmount,
+                        todayStr,
+                        p.method,
+                        targetAccId,
+                        saleId
+                    ]
+                );
+
+                await conn.query(
+                    'UPDATE financial_accounts SET balance = balance + ? WHERE id = ? AND company_id = ?',
+                    [pAmount, targetAccId, companyId]
+                );
+            }
         }
 
         await conn.commit();
@@ -2481,7 +2518,7 @@ app.post('/api/pos/sales', async (req, res) => {
             id: saleId,
             companyId,
             total: saleTotal,
-            accountId: targetAccountId,
+            accountId: primaryAccountId,
             message: 'Venda realizada com sucesso!'
         });
     } catch (err) {
@@ -2493,7 +2530,7 @@ app.post('/api/pos/sales', async (req, res) => {
     }
 });
 
-// Cancelar venda no PDV (estorno de estoque e financeiro)
+// Cancelar venda no PDV (estorno de estoque e financeiro proporcional)
 app.post('/api/pos/sales/:id/cancel', async (req, res) => {
     const conn = await pool.getConnection();
     try {
@@ -2529,8 +2566,27 @@ app.post('/api/pos/sales/:id/cancel', async (req, res) => {
             }
         }
 
-        // 3. Estorna o financeiro
-        if (sale.transaction_id && sale.account_id) {
+        // 3. Estorna o financeiro (busca todas as transações criadas para esta venda, seja por order_id ou transaction_id)
+        const [finTrans] = await conn.query(
+            'SELECT * FROM finance_transactions WHERE (order_id = ? OR id = ?) AND company_id = ?',
+            [saleId, sale.transaction_id, companyId]
+        );
+
+        if (finTrans.length > 0) {
+            for (const tr of finTrans) {
+                if (tr.account_id && tr.amount) {
+                    await conn.query(
+                        'UPDATE financial_accounts SET balance = balance - ? WHERE id = ? AND company_id = ?',
+                        [parseFloat(tr.amount), tr.account_id, companyId]
+                    );
+                }
+            }
+            await conn.query(
+                'DELETE FROM finance_transactions WHERE (order_id = ? OR id = ?) AND company_id = ?',
+                [saleId, sale.transaction_id, companyId]
+            );
+        } else if (sale.transaction_id && sale.account_id) {
+            // Fallback legado
             await conn.query(
                 'UPDATE financial_accounts SET balance = balance - ? WHERE id = ? AND company_id = ?',
                 [parseFloat(sale.total), sale.account_id, companyId]
