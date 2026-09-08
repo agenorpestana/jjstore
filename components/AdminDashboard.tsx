@@ -975,6 +975,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return;
     }
 
+    const isGift = !!viewingOrder.isGift || viewingOrder.paymentMethod === "Brinde / Patrocínio" || (viewingOrder.paymentMethod && viewingOrder.paymentMethod.toLowerCase().includes('brinde'));
+    if (isGift) {
+      alert("Este pedido é um brinde/patrocínio e não possui cobrança nem lançamento de valores.");
+      return;
+    }
+
     const remaining = viewingOrder.total - (viewingOrder.downPayment || 0);
     const amount = Number(paymentAmount);
 
@@ -3970,24 +3976,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           }).format(viewingOrder.downPayment || 0)}
                         </span>
                       </div>
-                      <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
-                        <span className="font-medium text-gray-800">
-                          Restante:
-                        </span>
-                        <span
-                          className={`font-bold text-lg ${viewingOrder.total - viewingOrder.downPayment > 0.01 ? "text-red-600" : "text-green-600"}`}
-                        >
-                          {new Intl.NumberFormat("pt-BR", {
-                            style: "currency",
-                            currency: "BRL",
-                          }).format(
-                            Math.max(
-                              0,
-                              viewingOrder.total - viewingOrder.downPayment,
-                            ),
-                          )}
-                        </span>
-                      </div>
+                      {(viewingOrder.isGift || viewingOrder.paymentMethod === "Brinde / Patrocínio" || (viewingOrder.paymentMethod && viewingOrder.paymentMethod.toLowerCase().includes('brinde'))) ? (
+                        <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
+                          <span className="text-gray-500 font-medium">Condição:</span>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                            Brinde / Patrocínio (Sem cobrança)
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
+                          <span className="font-medium text-gray-800">
+                            Restante:
+                          </span>
+                          <span
+                            className={`font-bold text-lg ${viewingOrder.total - viewingOrder.downPayment > 0.01 ? "text-red-600" : "text-green-600"}`}
+                          >
+                            {new Intl.NumberFormat("pt-BR", {
+                              style: "currency",
+                              currency: "BRL",
+                            }).format(
+                              Math.max(
+                                0,
+                                viewingOrder.total - viewingOrder.downPayment,
+                              ),
+                            )}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex-1 border-l border-gray-200 pl-6">
@@ -4054,84 +4069,107 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   </div>
 
-                  {viewingOrder.total - viewingOrder.downPayment > 0.01 && (
+                  {(viewingOrder.isGift || viewingOrder.paymentMethod === "Brinde / Patrocínio" || (viewingOrder.paymentMethod && viewingOrder.paymentMethod.toLowerCase().includes('brinde'))) ? (
                     <div className="pt-4 border-t border-gray-200">
-                      <label className="block text-xs font-bold text-blue-800 mb-3 uppercase tracking-wider">
-                        Adicionar Pagamento (Baixa):
-                      </label>
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <select
-                            className="w-full border border-blue-200 rounded-lg p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
-                            value={paymentMethodRemaining}
-                            onChange={(e) =>
-                              setPaymentMethodRemaining(e.target.value)
-                            }
-                          >
-                            <option value="Pix">Pix</option>
-                            <option value="Dinheiro">Dinheiro</option>
-                            <option value="Cartão de Crédito">
-                              Cartão de Crédito
-                            </option>
-                            <option value="Cartão de Débito">
-                              Cartão de Débito
-                            </option>
-                            <option value="Transferência">Transferência</option>
-                          </select>
-                          <select
-                            className="w-full border border-blue-200 rounded-lg p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
-                            value={paymentAccountId}
-                            onChange={(e) =>
-                              setPaymentAccountId(e.target.value)
-                            }
-                          >
-                            <option value="">Selecionar Conta Bancária</option>
-                            {financeAccounts
-                              .filter(
-                                (acc) =>
-                                  acc.active || acc.id === paymentAccountId,
-                              )
-                              .map((acc) => (
-                                <option key={acc.id} value={acc.id}>
-                                  {acc.name} {!acc.active && "(Inativa)"}
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">
-                              R$
-                            </span>
-                            <input
-                              type="number"
-                              placeholder="Valor"
-                              className="w-full pl-9 pr-3 py-2.5 border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
-                              value={paymentAmount}
-                              onChange={(e) => setPaymentAmount(e.target.value)}
-                            />
+                      <div className="p-4 bg-gray-100 border border-gray-200 rounded-xl flex items-center justify-between gap-3 text-gray-500 select-none">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-gray-200 text-gray-500 flex items-center justify-center font-bold">
+                            <Lock size={18} />
                           </div>
-                          <input
-                            type="date"
-                            className="w-full border border-blue-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
-                            value={paymentDate}
-                            onChange={(e) => setPaymentDate(e.target.value)}
-                          />
-                          <button
-                            onClick={handleRegisterPayment}
-                            disabled={!paymentAmount || loading}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition disabled:opacity-50 shadow-sm flex items-center justify-center gap-2"
-                          >
-                            {loading ? (
-                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            ) : (
-                              <Check size={18} />
-                            )}
-                            Confirmar Pagamento
-                          </button>
+                          <div>
+                            <p className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                              Lançamento de Pagamento Desativado
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Pedido identificado como Brinde / Patrocínio (Sem cobrança). Não é permitido lançar valores.
+                            </p>
+                          </div>
                         </div>
+                        <span className="px-3 py-1.5 bg-gray-200 text-gray-600 text-xs font-bold rounded-lg border border-gray-300">
+                          Bloqueado (Brinde)
+                        </span>
                       </div>
                     </div>
+                  ) : (
+                    viewingOrder.total - viewingOrder.downPayment > 0.01 && (
+                      <div className="pt-4 border-t border-gray-200">
+                        <label className="block text-xs font-bold text-blue-800 mb-3 uppercase tracking-wider">
+                          Adicionar Pagamento (Baixa):
+                        </label>
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <select
+                              className="w-full border border-blue-200 rounded-lg p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+                              value={paymentMethodRemaining}
+                              onChange={(e) =>
+                                setPaymentMethodRemaining(e.target.value)
+                              }
+                            >
+                              <option value="Pix">Pix</option>
+                              <option value="Dinheiro">Dinheiro</option>
+                              <option value="Cartão de Crédito">
+                                Cartão de Crédito
+                              </option>
+                              <option value="Cartão de Débito">
+                                Cartão de Débito
+                              </option>
+                              <option value="Transferência">Transferência</option>
+                            </select>
+                            <select
+                              className="w-full border border-blue-200 rounded-lg p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+                              value={paymentAccountId}
+                              onChange={(e) =>
+                                setPaymentAccountId(e.target.value)
+                              }
+                            >
+                              <option value="">Selecionar Conta Bancária</option>
+                              {financeAccounts
+                                .filter(
+                                  (acc) =>
+                                    acc.active || acc.id === paymentAccountId,
+                                )
+                                .map((acc) => (
+                                  <option key={acc.id} value={acc.id}>
+                                    {acc.name} {!acc.active && "(Inativa)"}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">
+                                R$
+                              </span>
+                              <input
+                                type="number"
+                                placeholder="Valor"
+                                className="w-full pl-9 pr-3 py-2.5 border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+                                value={paymentAmount}
+                                onChange={(e) => setPaymentAmount(e.target.value)}
+                              />
+                            </div>
+                            <input
+                              type="date"
+                              className="w-full border border-blue-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+                              value={paymentDate}
+                              onChange={(e) => setPaymentDate(e.target.value)}
+                            />
+                            <button
+                              onClick={handleRegisterPayment}
+                              disabled={!paymentAmount || loading}
+                              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition disabled:opacity-50 shadow-sm flex items-center justify-center gap-2"
+                            >
+                              {loading ? (
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              ) : (
+                                <Check size={18} />
+                              )}
+                              Confirmar Pagamento
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
                   )}
                 </div>
               </div>

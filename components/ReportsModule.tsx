@@ -281,10 +281,21 @@ export const ReportsModule: React.FC = () => {
                                     ) : orders.length === 0 ? (
                                         <tr><td colSpan={7} className="p-4 text-center text-gray-400 text-xs">Nenhum pedido encontrado no período.</td></tr>
                                     ) : (
-                                        orders.map(order => (
+                                        orders.map(order => {
+                                            const isGift = !!order.isGift || order.paymentMethod === 'Brinde / Patrocínio' || (order.paymentMethod && order.paymentMethod.toLowerCase().includes('brinde'));
+                                            const remaining = isGift ? 0 : Math.max(0, order.total - (order.downPayment || 0));
+
+                                            return (
                                             <tr key={order.id} className="hover:bg-gray-50 transition">
                                                 <td className="px-2 py-2">
-                                                    <div className="text-xs font-bold text-gray-900 leading-tight">{order.customerName}</div>
+                                                    <div className="text-xs font-bold text-gray-900 leading-tight flex items-center gap-1.5 flex-wrap">
+                                                        <span>{order.customerName}</span>
+                                                        {isGift && (
+                                                            <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[9px] font-bold border border-purple-200">
+                                                                Brinde
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <div className="text-[10px] text-gray-500">{order.customerPhone}</div>
                                                 </td>
                                                 <td className="px-2 py-2 min-w-[120px]">
@@ -316,16 +327,25 @@ export const ReportsModule: React.FC = () => {
                                                     <div className="text-[10px] text-blue-600 font-medium leading-tight">E: {formatDate(order.estimatedDelivery)}</div>
                                                 </td>
                                                 <td className="px-2 py-2 text-right text-xs text-green-600 font-bold">
-                                                    {formatCurrency(order.downPayment)}
+                                                    {formatCurrency(isGift ? 0 : (order.downPayment || 0))}
                                                 </td>
-                                                <td className="px-2 py-2 text-right text-xs text-red-600 font-bold">
-                                                    {formatCurrency(order.total - order.downPayment)}
+                                                <td className="px-2 py-2 text-right text-xs">
+                                                    {isGift ? (
+                                                        <span className="text-gray-400 font-semibold text-[10px] bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
+                                                            Isento (Brinde)
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-red-600 font-bold">
+                                                            {formatCurrency(remaining)}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-2 py-2 text-right text-xs font-black text-gray-900">
                                                     {formatCurrency(order.total)}
                                                 </td>
                                             </tr>
-                                        ))
+                                        );
+                                      })
                                     )}
                                 </tbody>
                                 <tfoot className="bg-gray-50 font-bold">
@@ -337,10 +357,16 @@ export const ReportsModule: React.FC = () => {
                                         </td>
                                         <td></td>
                                         <td className="px-2 py-2 text-right text-xs text-green-700">
-                                            {formatCurrency(orders.reduce((acc, o) => acc + Number(o.downPayment), 0))}
+                                            {formatCurrency(orders.reduce((acc, o) => {
+                                                const isG = !!o.isGift || o.paymentMethod === 'Brinde / Patrocínio' || (o.paymentMethod && o.paymentMethod.toLowerCase().includes('brinde'));
+                                                return acc + (isG ? 0 : Number(o.downPayment || 0));
+                                            }, 0))}
                                         </td>
                                         <td className="px-2 py-2 text-right text-xs text-red-700">
-                                            {formatCurrency(orders.reduce((acc, o) => acc + (Number(o.total) - Number(o.downPayment)), 0))}
+                                            {formatCurrency(orders.reduce((acc, o) => {
+                                                const isG = !!o.isGift || o.paymentMethod === 'Brinde / Patrocínio' || (o.paymentMethod && o.paymentMethod.toLowerCase().includes('brinde'));
+                                                return acc + (isG ? 0 : Math.max(0, Number(o.total) - Number(o.downPayment || 0)));
+                                            }, 0))}
                                         </td>
                                         <td className="px-2 py-2 text-right text-xs text-gray-900">
                                             {formatCurrency(orders.reduce((acc, o) => acc + Number(o.total), 0))}

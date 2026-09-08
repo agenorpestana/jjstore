@@ -170,9 +170,15 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, appSettings }
              </div>
              <div className="flex justify-between text-lg pt-2 border-t border-gray-200">
                  <span className="text-gray-900 font-bold">Saldo Restante</span>
-                 <span className={`${remainingBalance > 0.01 ? 'text-red-600' : 'text-green-600'} font-bold`}>
-                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(remainingBalance)}
-                 </span>
+                 {order.isGift || order.paymentMethod === 'Brinde / Patrocínio' || (order.paymentMethod && order.paymentMethod.toLowerCase().includes('brinde')) ? (
+                     <span className="text-gray-500 font-bold text-sm bg-gray-100 px-2.5 py-1 rounded border border-gray-200">
+                         Isento (Brinde)
+                     </span>
+                 ) : (
+                     <span className={`${remainingBalance > 0.01 ? 'text-red-600' : 'text-green-600'} font-bold`}>
+                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(remainingBalance)}
+                     </span>
+                 )}
              </div>
          </div>
       </div>
