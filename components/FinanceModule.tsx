@@ -4,7 +4,11 @@ import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Calendar, FileText,
 import { Transaction, FinancialAccount } from '../types';
 import { getTransactions, createTransaction, deleteTransaction, updateTransaction, getAccounts, createAccount, deleteAccount, updateAccount, transferBetweenAccounts } from '../services/mockData';
 
-export const FinanceModule: React.FC = () => {
+interface FinanceModuleProps {
+    posEnabled?: boolean;
+}
+
+export const FinanceModule: React.FC<FinanceModuleProps> = ({ posEnabled }) => {
     const [activeTab, setActiveTab] = useState<'transactions' | 'accounts'>('transactions');
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
@@ -45,7 +49,8 @@ export const FinanceModule: React.FC = () => {
         balance: '',
         initialBalance: '',
         initialBalanceDate: new Date().toISOString().split('T')[0],
-        active: true
+        active: true,
+        pos_payment_methods: [] as string[]
     });
 
     const [transferForm, setTransferForm] = useState({
@@ -144,7 +149,8 @@ export const FinanceModule: React.FC = () => {
                 balance: account.balance.toString(),
                 initialBalance: account.initialBalance?.toString() || account.balance.toString(),
                 initialBalanceDate: account.initialBalanceDate || new Date().toISOString().split('T')[0],
-                active: account.active
+                active: account.active,
+                pos_payment_methods: account.pos_payment_methods || []
             });
         } else {
             setEditingAccount(null);
@@ -153,7 +159,8 @@ export const FinanceModule: React.FC = () => {
                 balance: '',
                 initialBalance: '',
                 initialBalanceDate: new Date().toISOString().split('T')[0],
-                active: true
+                active: true,
+                pos_payment_methods: []
             });
         }
         setShowAccountModal(true);
@@ -177,17 +184,19 @@ export const FinanceModule: React.FC = () => {
                     name: accountForm.name,
                     initialBalance: Number(accountForm.initialBalance) || 0,
                     initialBalanceDate: accountForm.initialBalanceDate,
-                    active: accountForm.active
+                    active: accountForm.active,
+                    pos_payment_methods: accountForm.pos_payment_methods
                 });
             } else {
                 await createAccount({
                     name: accountForm.name,
                     initialBalance: Number(accountForm.initialBalance) || 0,
-                    initialBalanceDate: accountForm.initialBalanceDate
+                    initialBalanceDate: accountForm.initialBalanceDate,
+                    pos_payment_methods: accountForm.pos_payment_methods
                 });
             }
             setShowAccountModal(false);
-            setAccountForm({ name: '', balance: '', initialBalance: '', initialBalanceDate: new Date().toISOString().split('T')[0], active: true });
+            setAccountForm({ name: '', balance: '', initialBalance: '', initialBalanceDate: new Date().toISOString().split('T')[0], active: true, pos_payment_methods: [] });
             loadData();
         } catch (err: any) {
             alert("Erro ao salvar conta: " + (err.message || "Erro desconhecido"));
@@ -572,6 +581,17 @@ export const FinanceModule: React.FC = () => {
                                     </p>
                                 </div>
                                 
+                                {posEnabled && acc.pos_payment_methods && acc.pos_payment_methods.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-1 items-center">
+                                        <span className="text-[10px] uppercase font-black text-red-500 mr-1">PDV:</span>
+                                        {acc.pos_payment_methods.map(m => (
+                                            <span key={m} className="px-2 py-0.5 bg-red-50 text-red-700 border border-red-100 rounded-md text-[10px] font-bold">
+                                                {m}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                                
                                 <div className="absolute top-6 right-6 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                     <button 
                                         onClick={() => handleOpenAccountModal(acc)}
@@ -811,6 +831,69 @@ export const FinanceModule: React.FC = () => {
                                             Contas inativas não aparecem em novos lançamentos, mas o histórico é preservado.
                                         </p>
                                     )}
+                                </div>
+                            )}
+
+                            {/* Configuração de Formas de Pagamento do PDV */}
+                            {posEnabled && (
+                                <div className="space-y-2 pt-2 border-t border-gray-100">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                            Vincular Formas de Pagamento do PDV
+                                        </label>
+                                        <span className="text-[10px] bg-red-100 text-red-700 font-bold px-1.5 py-0.5 rounded">
+                                            Módulo PDV
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 leading-tight">
+                                        Selecione as formas de pagamento do PDV que devem creditar automaticamente nesta conta bancária:
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 pt-1">
+                                        {[
+                                            'Cartão de Crédito',
+                                            'Cartão de Débito',
+                                            'PIX',
+                                            'Boleto',
+                                            'Dinheiro',
+                                            'Outro'
+                                        ].map(method => {
+                                            const isChecked = (accountForm.pos_payment_methods || []).includes(method);
+                                            return (
+                                                <label
+                                                    key={method}
+                                                    className={`flex items-center gap-2 p-2 rounded-xl border text-xs font-medium cursor-pointer transition ${
+                                                        isChecked
+                                                            ? 'border-red-500 bg-red-50/50 text-red-900 font-bold'
+                                                            : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                                                    }`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={e => {
+                                                            const current = accountForm.pos_payment_methods || [];
+                                                            if (e.target.checked) {
+                                                                setAccountForm({
+                                                                    ...accountForm,
+                                                                    pos_payment_methods: [...current, method]
+                                                                });
+                                                            } else {
+                                                                setAccountForm({
+                                                                    ...accountForm,
+                                                                    pos_payment_methods: current.filter(m => m !== method)
+                                                                });
+                                                            }
+                                                        }}
+                                                        className="rounded text-red-600 focus:ring-red-500 w-3.5 h-3.5"
+                                                    />
+                                                    <span>{method}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 italic">
+                                        * Vendas em dinheiro sem conta vinculada caem no Caixa Administrativo padrão.
+                                    </p>
                                 </div>
                             )}
 

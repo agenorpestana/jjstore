@@ -66,6 +66,7 @@ function App() {
                             user.next_payment_due = data.next_payment_due;
                             user.trial_ends_at = data.trial_ends_at;
                             user.plan = data.plan;
+                            user.pos_enabled = !!data.pos_enabled;
                             localStorage.setItem('rastreae_user', JSON.stringify(user));
                         }
                     } catch (e) {
@@ -144,14 +145,16 @@ function App() {
             data.status !== currentUser.companyStatus ||
             data.next_payment_due !== currentUser.next_payment_due ||
             data.trial_ends_at !== currentUser.trial_ends_at ||
-            data.plan !== currentUser.plan
+            data.plan !== currentUser.plan ||
+            !!data.pos_enabled !== !!currentUser.pos_enabled
           ) {
             const updatedUser = {
               ...currentUser,
               companyStatus: data.status,
               next_payment_due: data.next_payment_due,
               trial_ends_at: data.trial_ends_at,
-              plan: data.plan
+              plan: data.plan,
+              pos_enabled: !!data.pos_enabled
             };
             localStorage.setItem('rastreae_user', JSON.stringify(updatedUser));
             setCurrentUser(updatedUser);

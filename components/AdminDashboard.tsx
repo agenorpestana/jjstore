@@ -42,6 +42,9 @@ import {
   Wallet,
   Gift,
   ArrowUpDown,
+  Sliders,
+  Store,
+  ShoppingBag,
 } from "lucide-react";
 import {
   Order,
@@ -77,6 +80,8 @@ import {
 import { Dashboard } from "./Dashboard";
 import { FinanceModule } from "./FinanceModule";
 import { ReportsModule } from "./ReportsModule";
+import { POSConfigModule } from "./POSConfigModule";
+import { POSModule } from "./POSModule";
 
 interface AdminDashboardProps {
   currentUser: Employee;
@@ -93,7 +98,8 @@ type Tab =
   | "reports"
   | "employees"
   | "settings"
-  | "subscription";
+  | "subscription"
+  | "pos_config";
 
 // --- Função Auxiliar de Compressão de Imagem ---
 const compressImage = (file: File): Promise<string> => {
@@ -157,6 +163,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPOSOpen, setIsPOSOpen] = useState(false);
 
   // Subscription Warning Logic
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
@@ -1690,6 +1697,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <CreditCard size={16} /> Minha Assinatura
               </button>
             )}
+
+            {/* Módulo PDV: Conf. PDV e Botão Vermelho PDV */}
+            {currentUser?.pos_enabled && (
+              <>
+                <button
+                  onClick={() => setActiveTab("pos_config")}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === "pos_config" ? "bg-primary text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                >
+                  <Sliders size={16} /> Conf. PDV
+                </button>
+
+                <button
+                  onClick={() => setIsPOSOpen(true)}
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-md text-sm shadow-md flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
+                  title="Abrir Frente de Caixa PDV"
+                >
+                  <Store size={16} /> PDV
+                </button>
+              </>
+            )}
           </div>
 
           {/* Only show 'New Employee' button if in employees tab AND is admin */}
@@ -1717,7 +1744,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === "dashboard" && isAdmin && <Dashboard />}
 
         {/* --- FINANCE TAB --- */}
-        {activeTab === "finance" && isAdmin && <FinanceModule />}
+        {activeTab === "finance" && isAdmin && (
+          <FinanceModule posEnabled={currentUser?.pos_enabled} />
+        )}
+
+        {/* --- POS CONFIG TAB --- */}
+        {activeTab === "pos_config" && (
+          <POSConfigModule onOpenPOS={() => setIsPOSOpen(true)} />
+        )}
 
         {/* --- REPORTS TAB --- */}
         {activeTab === "reports" && isAdmin && <ReportsModule />}
@@ -4260,6 +4294,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Full-screen POS (Frente de Caixa) Interface */}
+      {isPOSOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-100 overflow-hidden">
+          <POSModule
+            currentUser={currentUser}
+            onBackToDashboard={() => setIsPOSOpen(false)}
+            onOpenConfig={() => {
+              setIsPOSOpen(false);
+              setActiveTab("pos_config");
+            }}
+          />
         </div>
       )}
     </div>

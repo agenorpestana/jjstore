@@ -166,6 +166,69 @@ async function initDatabase() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS pos_products (
+        id VARCHAR(50) PRIMARY KEY,
+        company_id VARCHAR(50),
+        name VARCHAR(255) NOT NULL,
+        barcode VARCHAR(100),
+        category VARCHAR(100),
+        unit VARCHAR(20) DEFAULT 'UN',
+        cost_price DECIMAL(10, 2) DEFAULT 0,
+        sale_price DECIMAL(10, 2) DEFAULT 0,
+        stock_quantity DECIMAL(10, 2) DEFAULT 0,
+        min_stock DECIMAL(10, 2) DEFAULT 0,
+        active BOOLEAN DEFAULT TRUE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS pos_customers (
+        id VARCHAR(50) PRIMARY KEY,
+        company_id VARCHAR(50),
+        name VARCHAR(255) NOT NULL,
+        phone VARCHAR(50),
+        email VARCHAR(100),
+        document VARCHAR(50),
+        address TEXT,
+        is_default BOOLEAN DEFAULT FALSE,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS pos_sales (
+        id VARCHAR(50) PRIMARY KEY,
+        company_id VARCHAR(50),
+        customer_id VARCHAR(50),
+        customer_name VARCHAR(255),
+        subtotal DECIMAL(10, 2) DEFAULT 0,
+        discount DECIMAL(10, 2) DEFAULT 0,
+        discount_type VARCHAR(20) DEFAULT 'fixed',
+        total DECIMAL(10, 2) DEFAULT 0,
+        payment_method VARCHAR(100),
+        amount_paid DECIMAL(10, 2) DEFAULT 0,
+        change_amount DECIMAL(10, 2) DEFAULT 0,
+        account_id VARCHAR(50),
+        transaction_id VARCHAR(50),
+        seller_name VARCHAR(100),
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'COMPLETED',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS pos_sale_items (
+        id VARCHAR(50) PRIMARY KEY,
+        sale_id VARCHAR(50),
+        product_id VARCHAR(50),
+        product_name VARCHAR(255),
+        unit_price DECIMAL(10, 2) DEFAULT 0,
+        cost_price DECIMAL(10, 2) DEFAULT 0,
+        quantity DECIMAL(10, 2) DEFAULT 1,
+        total_price DECIMAL(10, 2) DEFAULT 0,
+        FOREIGN KEY (sale_id) REFERENCES pos_sales(id) ON DELETE CASCADE
+      );
     `;
 
     await pool.query(createTablesQuery);
@@ -199,7 +262,9 @@ async function initDatabase() {
        "ALTER TABLE financial_accounts ADD COLUMN initial_balance DECIMAL(10, 2) DEFAULT 0",
        "ALTER TABLE financial_accounts ADD COLUMN initial_balance_date VARCHAR(20)",
        "ALTER TABLE order_items ADD COLUMN is_set BOOLEAN DEFAULT FALSE",
-       "ALTER TABLE orders ADD COLUMN is_gift BOOLEAN DEFAULT FALSE"
+       "ALTER TABLE orders ADD COLUMN is_gift BOOLEAN DEFAULT FALSE",
+       "ALTER TABLE companies ADD COLUMN pos_enabled BOOLEAN DEFAULT FALSE",
+       "ALTER TABLE financial_accounts ADD COLUMN pos_payment_methods TEXT"
     ];
 
     for (const query of migrationQueries) {
@@ -219,6 +284,16 @@ async function initDatabase() {
             await pool.query(
                 'INSERT INTO financial_accounts (id, company_id, name, balance, is_default) VALUES (?, ?, ?, ?, ?)',
                 [accountId, company.id, 'CAIXA ADMINISTRATIVO', 0, true]
+            );
+        }
+
+        // Ensure default CONSUMIDOR FINAL customer exists
+        const [customers] = await pool.query('SELECT id FROM pos_customers WHERE company_id = ? AND is_default = TRUE', [company.id]);
+        if (customers.length === 0) {
+            const customerId = `cust_default_${company.id}`;
+            await pool.query(
+                'INSERT INTO pos_customers (id, company_id, name, is_default) VALUES (?, ?, ?, ?)',
+                [customerId, company.id, 'CONSUMIDOR FINAL', true]
             );
         }
     }
@@ -326,7 +401,7 @@ app.get('/api/companies/status', async (req, res) => {
             return res.json({ status: 'saas_admin' });
         }
         
-        const [rows] = await pool.query('SELECT status, trial_ends_at, next_payment_due, plan FROM companies WHERE id = ?', [companyId]);
+        const [rows] = await pool.query('SELECT status, trial_ends_at, next_payment_due, plan, pos_enabled FROM companies WHERE id = ?', [companyId]);
         if (rows.length === 0) {
             return res.status(404).json({ error: 'Empresa não encontrada' });
         }
@@ -351,7 +426,8 @@ app.get('/api/companies/status', async (req, res) => {
             status: currentStatus,
             plan: company.plan,
             trial_ends_at: company.trial_ends_at,
-            next_payment_due: company.next_payment_due
+            next_payment_due: company.next_payment_due,
+            pos_enabled: !!company.pos_enabled
         });
     } catch (err) {
         console.error("Erro ao obter status da empresa:", err);
@@ -652,6 +728,17 @@ app.patch('/api/saas/companies/:id/status', async (req, res) => {
     }
 });
 
+// Atualizar permissão de PDV da empresa
+app.patch('/api/saas/companies/:id/pos', async (req, res) => {
+    try {
+        const { pos_enabled } = req.body;
+        await pool.query('UPDATE companies SET pos_enabled = ? WHERE id = ?', [pos_enabled ? 1 : 0, req.params.id]);
+        res.json({ message: 'POS status updated', pos_enabled: !!pos_enabled });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // NOVO: Renovar manualmente (dinheiro em mãos)
 app.post('/api/saas/companies/:id/renew', async (req, res) => {
     try {
@@ -725,7 +812,7 @@ app.post('/api/register-company', async (req, res) => {
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
-        const { companyName, adminName, login, password, contact, plan } = req.body;
+        const { companyName, adminName, login, password, contact, plan, pos_enabled } = req.body;
 
         const companyId = `COMP-${Date.now()}`;
         
@@ -735,8 +822,8 @@ app.post('/api/register-company', async (req, res) => {
         trialEnd.setDate(now.getDate() + 7);
 
         await conn.query(
-            'INSERT INTO companies (id, name, plan, status, trial_ends_at) VALUES (?, ?, ?, ?, ?)',
-            [companyId, companyName, plan || 'Básico', 'trial', trialEnd]
+            'INSERT INTO companies (id, name, plan, status, trial_ends_at, pos_enabled) VALUES (?, ?, ?, ?, ?, ?)',
+            [companyId, companyName, plan || 'Básico', 'trial', trialEnd, pos_enabled ? 1 : 0]
         );
 
         const empId = `EMP-${Date.now()}`;
@@ -754,6 +841,13 @@ app.post('/api/register-company', async (req, res) => {
         await conn.query(
             'INSERT INTO financial_accounts (id, company_id, name, balance, is_default) VALUES (?, ?, ?, ?, ?)',
             [accountId, companyId, 'CAIXA ADMINISTRATIVO', 0, true]
+        );
+
+        // 5. Create Default POS Customer (CONSUMIDOR FINAL)
+        const custId = `cust_default_${companyId}`;
+        await conn.query(
+            'INSERT INTO pos_customers (id, company_id, name, is_default) VALUES (?, ?, ?, ?)',
+            [custId, companyId, 'CONSUMIDOR FINAL', true]
         );
 
         await conn.commit();
@@ -1719,15 +1813,26 @@ app.get('/api/finance/accounts', async (req, res) => {
             WHERE a.company_id = ?
         `, [companyId]);
         
-        res.json(rows.map(r => ({ 
-            ...r, 
-            balance: parseFloat(r.balance), 
-            initialBalance: parseFloat(r.initial_balance || 0),
-            initialBalanceDate: r.initial_balance_date,
-            isDefault: !!r.is_default, 
-            active: !!r.active,
-            hasMovements: r.transactionCount > 0
-        })));
+        res.json(rows.map(r => {
+            let posMethods = [];
+            if (r.pos_payment_methods) {
+                try {
+                    posMethods = typeof r.pos_payment_methods === 'string' ? JSON.parse(r.pos_payment_methods) : r.pos_payment_methods;
+                } catch(e) {
+                    posMethods = [];
+                }
+            }
+            return { 
+                ...r, 
+                balance: parseFloat(r.balance), 
+                initialBalance: parseFloat(r.initial_balance || 0),
+                initialBalanceDate: r.initial_balance_date,
+                isDefault: !!r.is_default, 
+                active: !!r.active,
+                hasMovements: r.transactionCount > 0,
+                pos_payment_methods: Array.isArray(posMethods) ? posMethods : []
+            };
+        }));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1738,18 +1843,19 @@ app.post('/api/finance/accounts', async (req, res) => {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
-        const { name, balance, initialBalance, initialBalanceDate } = req.body;
+        const { name, balance, initialBalance, initialBalanceDate, pos_payment_methods } = req.body;
         const id = `acc_${Date.now()}`;
         
         const startBalance = initialBalance !== undefined ? parseFloat(initialBalance) : parseFloat(balance || 0);
         const startDate = initialBalanceDate || new Date().toISOString().split('T')[0];
+        const methodsJson = pos_payment_methods ? JSON.stringify(pos_payment_methods) : JSON.stringify([]);
 
         await pool.query(
-            'INSERT INTO financial_accounts (id, company_id, name, balance, initial_balance, initial_balance_date, is_default, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [id, companyId, name, startBalance, startBalance, startDate, false, true]
+            'INSERT INTO financial_accounts (id, company_id, name, balance, initial_balance, initial_balance_date, is_default, active, pos_payment_methods) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, companyId, name, startBalance, startBalance, startDate, false, true, methodsJson]
         );
 
-        res.status(201).json({ id, companyId, name, balance: startBalance, initialBalance: startBalance, initialBalanceDate: startDate, isDefault: false, active: true });
+        res.status(201).json({ id, companyId, name, balance: startBalance, initialBalance: startBalance, initialBalanceDate: startDate, isDefault: false, active: true, pos_payment_methods: pos_payment_methods || [] });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1760,7 +1866,7 @@ app.patch('/api/finance/accounts/:id', async (req, res) => {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(403).json({ error: 'Access denied' });
 
-        const { name, initialBalance, initialBalanceDate, active } = req.body;
+        const { name, initialBalance, initialBalanceDate, active, pos_payment_methods } = req.body;
         
         const [currentAcc] = await pool.query('SELECT * FROM financial_accounts WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
         if (currentAcc.length === 0) return res.status(404).json({ error: 'Account not found' });
@@ -1798,6 +1904,11 @@ app.patch('/api/finance/accounts/:id', async (req, res) => {
             }
             updates.push('active = ?');
             params.push(active);
+        }
+
+        if (pos_payment_methods !== undefined) {
+            updates.push('pos_payment_methods = ?');
+            params.push(JSON.stringify(pos_payment_methods));
         }
         
         if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
@@ -2014,12 +2125,439 @@ app.delete('/api/employees/:id', async (req, res) => {
     }
 });
 
+// ==========================================
+// --- MODULO PDV (PONTO DE VENDA) ROUTES ---
+// ==========================================
+
+// --- Produtos PDV ---
+app.get('/api/pos/products', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+        const [rows] = await pool.query('SELECT * FROM pos_products WHERE company_id = ? ORDER BY name ASC', [companyId]);
+        res.json(rows.map(r => ({
+            id: r.id,
+            companyId: r.company_id,
+            name: r.name,
+            barcode: r.barcode || '',
+            category: r.category || '',
+            unit: r.unit || 'UN',
+            costPrice: parseFloat(r.cost_price || 0),
+            salePrice: parseFloat(r.sale_price || 0),
+            stockQuantity: parseFloat(r.stock_quantity || 0),
+            minStock: parseFloat(r.min_stock || 0),
+            active: !!r.active,
+            createdAt: r.created_at
+        })));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/pos/products', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+        const { name, barcode, category, unit, costPrice, salePrice, stockQuantity, minStock } = req.body;
+        if (!name) return res.status(400).json({ error: 'Nome do produto é obrigatório' });
+        const id = `PROD-${Date.now()}`;
+        await pool.query(
+            'INSERT INTO pos_products (id, company_id, name, barcode, category, unit, cost_price, sale_price, stock_quantity, min_stock, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, companyId, name, barcode || null, category || null, unit || 'UN', parseFloat(costPrice || 0), parseFloat(salePrice || 0), parseFloat(stockQuantity || 0), parseFloat(minStock || 0), true]
+        );
+        res.status(201).json({ id, companyId, name, barcode, category, unit: unit || 'UN', costPrice: parseFloat(costPrice || 0), salePrice: parseFloat(salePrice || 0), stockQuantity: parseFloat(stockQuantity || 0), minStock: parseFloat(minStock || 0), active: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/pos/products/:id', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+        const { name, barcode, category, unit, costPrice, salePrice, stockQuantity, minStock, active } = req.body;
+        await pool.query(
+            'UPDATE pos_products SET name = ?, barcode = ?, category = ?, unit = ?, cost_price = ?, sale_price = ?, stock_quantity = ?, min_stock = ?, active = ? WHERE id = ? AND company_id = ?',
+            [name, barcode || null, category || null, unit || 'UN', parseFloat(costPrice || 0), parseFloat(salePrice || 0), parseFloat(stockQuantity || 0), parseFloat(minStock || 0), active !== false, req.params.id, companyId]
+        );
+        res.json({ message: 'Product updated' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/pos/products/:id', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+        await pool.query('DELETE FROM pos_products WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+        res.json({ message: 'Product deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Clientes PDV ---
+app.get('/api/pos/customers', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+        
+        // Garante consumidor final
+        const [check] = await pool.query('SELECT id FROM pos_customers WHERE company_id = ? AND is_default = TRUE', [companyId]);
+        if (check.length === 0) {
+            const defId = `cust_default_${companyId}`;
+            await pool.query('INSERT INTO pos_customers (id, company_id, name, is_default) VALUES (?, ?, ?, ?)', [defId, companyId, 'CONSUMIDOR FINAL', true]);
+        }
+
+        const [rows] = await pool.query('SELECT * FROM pos_customers WHERE company_id = ? ORDER BY is_default DESC, name ASC', [companyId]);
+        res.json(rows.map(r => ({
+            id: r.id,
+            companyId: r.company_id,
+            name: r.name,
+            phone: r.phone || '',
+            email: r.email || '',
+            document: r.document || '',
+            address: r.address || '',
+            isDefault: !!r.is_default,
+            notes: r.notes || '',
+            createdAt: r.created_at
+        })));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/pos/customers', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+        const { name, phone, email, document, address, notes } = req.body;
+        if (!name) return res.status(400).json({ error: 'Nome do cliente é obrigatório' });
+        const id = `CUST-${Date.now()}`;
+        await pool.query(
+            'INSERT INTO pos_customers (id, company_id, name, phone, email, document, address, is_default, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, companyId, name, phone || null, email || null, document || null, address || null, false, notes || null]
+        );
+        res.status(201).json({ id, companyId, name, phone, email, document, address, isDefault: false, notes });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/pos/customers/:id', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+        const { name, phone, email, document, address, notes } = req.body;
+        const [existing] = await pool.query('SELECT is_default FROM pos_customers WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Cliente não encontrado' });
+        
+        // Não permite renomear o CONSUMIDOR FINAL padrão
+        const finalName = existing[0].is_default ? 'CONSUMIDOR FINAL' : name;
+        await pool.query(
+            'UPDATE pos_customers SET name = ?, phone = ?, email = ?, document = ?, address = ?, notes = ? WHERE id = ? AND company_id = ?',
+            [finalName, phone || null, email || null, document || null, address || null, notes || null, req.params.id, companyId]
+        );
+        res.json({ message: 'Customer updated' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/pos/customers/:id', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+        const [existing] = await pool.query('SELECT is_default FROM pos_customers WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Cliente não encontrado' });
+        if (existing[0].is_default) {
+            return res.status(400).json({ error: 'O cliente padrão CONSUMIDOR FINAL não pode ser excluído.' });
+        }
+        await pool.query('DELETE FROM pos_customers WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+        res.json({ message: 'Customer deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Vendas PDV (com integração financeira e baixa de estoque) ---
+app.get('/api/pos/sales', async (req, res) => {
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+        const [sales] = await pool.query(`
+            SELECT s.*, a.name as accountName 
+            FROM pos_sales s 
+            LEFT JOIN financial_accounts a ON s.account_id = a.id 
+            WHERE s.company_id = ? 
+            ORDER BY s.created_at DESC LIMIT 100
+        `, [companyId]);
+        
+        if (sales.length === 0) return res.json([]);
+        
+        const saleIds = sales.map(s => s.id);
+        const [items] = await pool.query('SELECT * FROM pos_sale_items WHERE sale_id IN (?)', [saleIds]);
+        
+        const itemsBySale = {};
+        for (const it of items) {
+            if (!itemsBySale[it.sale_id]) itemsBySale[it.sale_id] = [];
+            itemsBySale[it.sale_id].push({
+                id: it.id,
+                productId: it.product_id,
+                productName: it.product_name,
+                unitPrice: parseFloat(it.unit_price || 0),
+                costPrice: parseFloat(it.cost_price || 0),
+                quantity: parseFloat(it.quantity || 0),
+                totalPrice: parseFloat(it.total_price || 0)
+            });
+        }
+        
+        res.json(sales.map(s => ({
+            id: s.id,
+            companyId: s.company_id,
+            customerId: s.customer_id,
+            customerName: s.customer_name,
+            subtotal: parseFloat(s.subtotal || 0),
+            discount: parseFloat(s.discount || 0),
+            discountType: s.discount_type || 'fixed',
+            total: parseFloat(s.total || 0),
+            paymentMethod: s.payment_method,
+            amountPaid: parseFloat(s.amount_paid || 0),
+            changeAmount: parseFloat(s.change_amount || 0),
+            accountId: s.account_id,
+            accountName: s.accountName || 'Caixa Administrativo',
+            sellerName: s.seller_name,
+            notes: s.notes,
+            status: s.status,
+            createdAt: s.created_at,
+            items: itemsBySale[s.id] || []
+        })));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/pos/sales', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        await conn.beginTransaction();
+
+        const {
+            customerId,
+            customerName,
+            subtotal,
+            discount,
+            discountType,
+            total,
+            paymentMethod,
+            amountPaid,
+            changeAmount,
+            sellerName,
+            notes,
+            items
+        } = req.body;
+
+        if (!items || !items.length) {
+            await conn.rollback();
+            return res.status(400).json({ error: 'A venda deve conter pelo menos um item.' });
+        }
+
+        const saleId = `PDV-${Date.now()}`;
+        const saleTotal = parseFloat(total || 0);
+
+        // 1. Descobrir qual conta bancária deve receber o valor da venda
+        let targetAccountId = null;
+
+        // Se a forma for dinheiro -> CAIXA ADMINISTRATIVO (padrão)
+        if (paymentMethod === 'Dinheiro') {
+            const [defAcc] = await conn.query('SELECT id FROM financial_accounts WHERE company_id = ? AND is_default = TRUE LIMIT 1', [companyId]);
+            if (defAcc.length > 0) targetAccountId = defAcc[0].id;
+        } else {
+            // Verifica contas ativas vinculadas a esta forma de pagamento
+            const [accounts] = await conn.query('SELECT id, pos_payment_methods, is_default FROM financial_accounts WHERE company_id = ? AND active = TRUE', [companyId]);
+            for (const acc of accounts) {
+                if (acc.pos_payment_methods) {
+                    try {
+                        const methods = typeof acc.pos_payment_methods === 'string' ? JSON.parse(acc.pos_payment_methods) : acc.pos_payment_methods;
+                        if (Array.isArray(methods) && methods.includes(paymentMethod)) {
+                            targetAccountId = acc.id;
+                            break;
+                        }
+                    } catch(e) {}
+                }
+            }
+            // Se nenhuma conta estiver especificamente vinculada, cai na conta padrão
+            if (!targetAccountId) {
+                const defaultAcc = accounts.find(a => a.is_default);
+                if (defaultAcc) targetAccountId = defaultAcc.id;
+            }
+        }
+
+        // Se ainda não tiver conta (caso de segurança), busca a primeira existente
+        if (!targetAccountId) {
+            const [fallbackAcc] = await conn.query('SELECT id FROM financial_accounts WHERE company_id = ? LIMIT 1', [companyId]);
+            if (fallbackAcc.length > 0) targetAccountId = fallbackAcc[0].id;
+        }
+
+        const transactionId = `TX-${saleId}`;
+
+        // 2. Inserir a venda
+        await conn.query(
+            `INSERT INTO pos_sales 
+            (id, company_id, customer_id, customer_name, subtotal, discount, discount_type, total, payment_method, amount_paid, change_amount, account_id, transaction_id, seller_name, notes, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                saleId,
+                companyId,
+                customerId || null,
+                customerName || 'CONSUMIDOR FINAL',
+                parseFloat(subtotal || 0),
+                parseFloat(discount || 0),
+                discountType || 'fixed',
+                saleTotal,
+                paymentMethod,
+                parseFloat(amountPaid || saleTotal),
+                parseFloat(changeAmount || 0),
+                targetAccountId,
+                transactionId,
+                sellerName || null,
+                notes || null,
+                'COMPLETED'
+            ]
+        );
+
+        // 3. Inserir itens e baixar estoque de pos_products
+        for (const it of items) {
+            const itemId = `PSI-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            const qty = parseFloat(it.quantity || 1);
+            const unitPr = parseFloat(it.unitPrice || 0);
+            const costPr = parseFloat(it.costPrice || 0);
+            const totalPr = parseFloat(it.totalPrice || (qty * unitPr));
+
+            await conn.query(
+                `INSERT INTO pos_sale_items (id, sale_id, product_id, product_name, unit_price, cost_price, quantity, total_price)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [itemId, saleId, it.productId, it.productName, unitPr, costPr, qty, totalPr]
+            );
+
+            // Baixa no estoque
+            if (it.productId) {
+                await conn.query(
+                    'UPDATE pos_products SET stock_quantity = stock_quantity - ? WHERE id = ? AND company_id = ?',
+                    [qty, it.productId, companyId]
+                );
+            }
+        }
+
+        // 4. Integração Financeira: Cria lançamento em finance_transactions e atualiza saldo
+        if (saleTotal > 0 && targetAccountId) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            await conn.query(
+                `INSERT INTO finance_transactions (id, company_id, type, description, amount, date, paymentMethod, account_id)
+                 VALUES (?, ?, 'revenue', ?, ?, ?, ?, ?)`,
+                [
+                    transactionId,
+                    companyId,
+                    `Venda PDV #${saleId} - ${customerName || 'CONSUMIDOR FINAL'}`,
+                    saleTotal,
+                    todayStr,
+                    paymentMethod,
+                    targetAccountId
+                ]
+            );
+
+            await conn.query(
+                'UPDATE financial_accounts SET balance = balance + ? WHERE id = ? AND company_id = ?',
+                [saleTotal, targetAccountId, companyId]
+            );
+        }
+
+        await conn.commit();
+        res.status(201).json({
+            id: saleId,
+            companyId,
+            total: saleTotal,
+            accountId: targetAccountId,
+            message: 'Venda realizada com sucesso!'
+        });
+    } catch (err) {
+        await conn.rollback();
+        console.error("Erro na venda PDV:", err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        conn.release();
+    }
+});
+
+// Cancelar venda no PDV (estorno de estoque e financeiro)
+app.post('/api/pos/sales/:id/cancel', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(403).json({ error: 'Access denied' });
+
+        await conn.beginTransaction();
+
+        const saleId = req.params.id;
+        const [saleRows] = await conn.query('SELECT * FROM pos_sales WHERE id = ? AND company_id = ?', [saleId, companyId]);
+        if (saleRows.length === 0) {
+            await conn.rollback();
+            return res.status(404).json({ error: 'Venda não encontrada' });
+        }
+
+        const sale = saleRows[0];
+        if (sale.status === 'CANCELLED') {
+            await conn.rollback();
+            return res.status(400).json({ error: 'Esta venda já foi cancelada.' });
+        }
+
+        // 1. Atualiza status da venda
+        await conn.query("UPDATE pos_sales SET status = 'CANCELLED' WHERE id = ? AND company_id = ?", [saleId, companyId]);
+
+        // 2. Devolve estoque dos itens
+        const [items] = await conn.query('SELECT * FROM pos_sale_items WHERE sale_id = ?', [saleId]);
+        for (const it of items) {
+            if (it.product_id) {
+                await conn.query(
+                    'UPDATE pos_products SET stock_quantity = stock_quantity + ? WHERE id = ? AND company_id = ?',
+                    [parseFloat(it.quantity), it.product_id, companyId]
+                );
+            }
+        }
+
+        // 3. Estorna o financeiro
+        if (sale.transaction_id && sale.account_id) {
+            await conn.query(
+                'UPDATE financial_accounts SET balance = balance - ? WHERE id = ? AND company_id = ?',
+                [parseFloat(sale.total), sale.account_id, companyId]
+            );
+            await conn.query(
+                'DELETE FROM finance_transactions WHERE id = ? AND company_id = ?',
+                [sale.transaction_id, companyId]
+            );
+        }
+
+        await conn.commit();
+        res.json({ message: 'Venda cancelada e estoque estornado com sucesso!' });
+    } catch (err) {
+        await conn.rollback();
+        console.error("Erro ao cancelar venda PDV:", err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        conn.release();
+    }
+});
+
 app.post('/api/login', async (req, res) => {
     try {
         const { login, password } = req.body;
-        // Busca usuário e dados da empresa. AQUI FOI ADICIONADO 'c.plan'
+        // Busca usuário e dados da empresa. AQUI FOI ADICIONADO 'c.plan' e 'c.pos_enabled'
         const [rows] = await pool.query(`
-            SELECT e.*, c.name as companyName, c.status as companyStatus, c.trial_ends_at, c.next_payment_due, c.plan
+            SELECT e.*, c.name as companyName, c.status as companyStatus, c.trial_ends_at, c.next_payment_due, c.plan, c.pos_enabled
             FROM employees e 
             LEFT JOIN companies c ON e.company_id = c.id
             WHERE e.login = ? AND e.password = ?
@@ -2058,7 +2596,8 @@ app.post('/api/login', async (req, res) => {
                 companyStatus: user.companyStatus, // Frontend needs this to show Pay Wall
                 plan: user.plan,
                 trial_ends_at: user.trial_ends_at,
-                next_payment_due: user.next_payment_due
+                next_payment_due: user.next_payment_due,
+                pos_enabled: !!user.pos_enabled
             });
         } else {
             res.status(401).json({ error: 'Invalid credentials' });

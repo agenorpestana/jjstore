@@ -110,6 +110,7 @@ export interface FinancialAccount {
   active: boolean;
   created_at: string;
   hasMovements?: boolean;
+  pos_payment_methods?: string[];
 }
 
 export interface DashboardData {
@@ -143,6 +144,7 @@ export interface Employee {
   plan?: string;
   trial_ends_at?: string;
   next_payment_due?: string;
+  pos_enabled?: boolean;
 }
 
 export interface NewEmployeeInput {
@@ -181,6 +183,7 @@ export interface Company {
   created_at: string;
   trial_ends_at?: string;
   next_payment_due?: string;
+  pos_enabled?: boolean;
   // Campos auxiliares vindos do join com employees (admin)
   adminName?: string;
   contact?: string;
@@ -190,4 +193,64 @@ export interface Company {
 export interface SaasSettings {
   mpAccessToken: string;
   mpPublicKey: string;
+}
+
+// --- PDV (Ponto de Venda) Interfaces ---
+export interface POSProduct {
+  id: string;
+  companyId: string;
+  name: string;
+  barcode?: string;
+  category?: string;
+  unit: string;
+  costPrice: number;
+  salePrice: number;
+  stockQuantity: number;
+  minStock?: number;
+  active: boolean;
+  createdAt?: string;
+}
+
+export interface POSCustomer {
+  id: string;
+  companyId: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  document?: string;
+  address?: string;
+  isDefault: boolean;
+  notes?: string;
+  createdAt?: string;
+}
+
+export interface POSSaleItem {
+  id?: string;
+  productId: string;
+  productName: string;
+  unitPrice: number;
+  costPrice: number;
+  quantity: number;
+  totalPrice: number;
+}
+
+export interface POSSale {
+  id: string;
+  companyId: string;
+  customerId: string;
+  customerName: string;
+  subtotal: number;
+  discount: number;
+  discountType: 'percentage' | 'fixed';
+  total: number;
+  paymentMethod: string;
+  amountPaid?: number;
+  changeAmount?: number;
+  accountId?: string;
+  accountName?: string;
+  sellerName?: string;
+  notes?: string;
+  status: 'COMPLETED' | 'CANCELLED';
+  createdAt: string;
+  items: POSSaleItem[];
 }

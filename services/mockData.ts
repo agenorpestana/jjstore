@@ -1,5 +1,5 @@
 
-import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, Plan, Company, SaasSettings, Transaction, DashboardData, FinancialAccount } from '../types';
+import { Order, OrderStatus, NewOrderInput, Employee, NewEmployeeInput, AppSettings, Plan, Company, SaasSettings, Transaction, DashboardData, FinancialAccount, POSProduct, POSCustomer, POSSale } from '../types';
 
 // Detecta se estamos rodando localmente ou em produção
 const getBaseUrl = () => {
@@ -121,6 +121,15 @@ export const updateCompanyStatus = async (id: string, status: 'active' | 'inacti
         method: 'PATCH',
         headers: getHeaders(),
         body: JSON.stringify({ status })
+    });
+    await handleResponse(response);
+};
+
+export const updateCompanyPos = async (id: string, pos_enabled: boolean): Promise<void> => {
+    const response = await fetch(`${API_URL}/saas/companies/${id}/pos`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ pos_enabled })
     });
     await handleResponse(response);
 };
@@ -521,7 +530,7 @@ export const getAccounts = async (): Promise<FinancialAccount[]> => {
     return handleResponse(response);
 };
 
-export const createAccount = async (data: { name: string, initialBalance: number, initialBalanceDate: string }): Promise<FinancialAccount> => {
+export const createAccount = async (data: { name: string, initialBalance: number, initialBalanceDate: string, pos_payment_methods?: string[] }): Promise<FinancialAccount> => {
     const response = await fetch(`${API_URL}/finance/accounts`, {
         method: 'POST',
         headers: getHeaders(),
@@ -620,4 +629,121 @@ export const deleteEmployee = async (id: string): Promise<void> => {
         headers: getHeaders() 
     });
     await handleResponse(response);
-}
+};
+
+// ==========================================
+// --- SERVIÇOS DO MÓDULO PDV ---
+// ==========================================
+
+// --- Produtos PDV ---
+export const getPOSProducts = async (): Promise<POSProduct[]> => {
+    const response = await fetch(`${API_URL}/pos/products`, {
+        headers: getHeaders()
+    });
+    return handleResponse(response);
+};
+
+export const createPOSProduct = async (product: Omit<POSProduct, 'id' | 'companyId' | 'active'>): Promise<POSProduct> => {
+    const response = await fetch(`${API_URL}/pos/products`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(product)
+    });
+    return handleResponse(response);
+};
+
+export const updatePOSProduct = async (id: string, product: Partial<POSProduct>): Promise<void> => {
+    const response = await fetch(`${API_URL}/pos/products/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(product)
+    });
+    await handleResponse(response);
+};
+
+export const deletePOSProduct = async (id: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/pos/products/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+    });
+    await handleResponse(response);
+};
+
+// --- Clientes PDV ---
+export const getPOSCustomers = async (): Promise<POSCustomer[]> => {
+    const response = await fetch(`${API_URL}/pos/customers`, {
+        headers: getHeaders()
+    });
+    return handleResponse(response);
+};
+
+export const createPOSCustomer = async (customer: Omit<POSCustomer, 'id' | 'companyId' | 'isDefault'>): Promise<POSCustomer> => {
+    const response = await fetch(`${API_URL}/pos/customers`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(customer)
+    });
+    return handleResponse(response);
+};
+
+export const updatePOSCustomer = async (id: string, customer: Partial<POSCustomer>): Promise<void> => {
+    const response = await fetch(`${API_URL}/pos/customers/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(customer)
+    });
+    await handleResponse(response);
+};
+
+export const deletePOSCustomer = async (id: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/pos/customers/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+    });
+    await handleResponse(response);
+};
+
+// --- Vendas PDV ---
+export const getPOSSales = async (): Promise<POSSale[]> => {
+    const response = await fetch(`${API_URL}/pos/sales`, {
+        headers: getHeaders()
+    });
+    return handleResponse(response);
+};
+
+export const createPOSSale = async (sale: {
+    customerId: string;
+    customerName: string;
+    subtotal: number;
+    discount: number;
+    discountType: 'percentage' | 'fixed';
+    total: number;
+    paymentMethod: string;
+    amountPaid?: number;
+    changeAmount?: number;
+    sellerName?: string;
+    notes?: string;
+    items: Array<{
+        productId: string;
+        productName: string;
+        unitPrice: number;
+        costPrice: number;
+        quantity: number;
+        totalPrice: number;
+    }>;
+}): Promise<any> => {
+    const response = await fetch(`${API_URL}/pos/sales`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(sale)
+    });
+    return handleResponse(response);
+};
+
+export const cancelPOSSale = async (id: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/pos/sales/${id}/cancel`, {
+        method: 'POST',
+        headers: getHeaders()
+    });
+    await handleResponse(response);
+};

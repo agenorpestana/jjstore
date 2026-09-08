@@ -1,5 +1,6 @@
 {
   "name": "Rastreaê - Acompanhamento de Pedidos",
   "description": "Uma aplicação moderna para rastreamento de pedidos em tempo real, com detalhes completos e assistente de suporte inteligente via Gemini AI.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

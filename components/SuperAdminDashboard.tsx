@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Building, X, Search, Shield, LogOut, LayoutList, Plus, Edit2, Trash2, CheckCircle, Ban, Phone, User, Calendar, CreditCard, Settings, Save, DollarSign, Eye, EyeOff, Minus } from 'lucide-react';
+import { Building, X, Search, Shield, LogOut, LayoutList, Plus, Edit2, Trash2, CheckCircle, Ban, Phone, User, Calendar, CreditCard, Settings, Save, DollarSign, Eye, EyeOff, Minus, ShoppingBag } from 'lucide-react';
 import { Employee, Company, Plan } from '../types';
-import { getCompanies, updateCompanyStatus, getPlans, createPlan, updatePlan, deletePlan, registerCompany, getSaasSettings, saveSaasSettings, manualRenewCompany, deleteCompany, togglePlanVisibility, revokeCompanyMonth } from '../services/mockData';
+import { getCompanies, updateCompanyStatus, updateCompanyPos, getPlans, createPlan, updatePlan, deletePlan, registerCompany, getSaasSettings, saveSaasSettings, manualRenewCompany, deleteCompany, togglePlanVisibility, revokeCompanyMonth } from '../services/mockData';
 
 interface SuperAdminDashboardProps {
   currentUser: Employee;
@@ -36,7 +36,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
       contact: '',
       login: '',
       password: '',
-      plan: 'Básico'
+      plan: 'Básico',
+      pos_enabled: false
   });
 
   useEffect(() => {
@@ -81,6 +82,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
       if (window.confirm(`Deseja realmente ${newStatus === 'active' ? 'ativar' : 'suspender'} esta empresa?`)) {
           await updateCompanyStatus(id, newStatus);
           fetchCompanies();
+      }
+  };
+
+  const handleTogglePos = async (id: string, currentPos: boolean | undefined, companyName: string) => {
+      const nextState = !currentPos;
+      const actionText = nextState ? 'ATIVAR' : 'DESATIVAR';
+      if (window.confirm(`Deseja realmente ${actionText} o Módulo PDV para a empresa "${companyName}"?`)) {
+          try {
+              await updateCompanyPos(id, nextState);
+              fetchCompanies();
+          } catch (e: any) {
+              alert(e.message || 'Erro ao alterar permissão do PDV.');
+          }
       }
   };
 
@@ -174,7 +188,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
           await registerCompany(companyForm);
           alert('Empresa cadastrada com sucesso!');
           setShowCompanyModal(false);
-          setCompanyForm({ companyName: '', adminName: '', contact: '', login: '', password: '', plan: 'Básico' });
+          setCompanyForm({ companyName: '', adminName: '', contact: '', login: '', password: '', plan: 'Básico', pos_enabled: false });
           fetchCompanies();
       } catch (err: any) {
           alert(err.message || 'Erro ao cadastrar');
@@ -242,6 +256,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Empresa</th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Admin / Contato</th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plano</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Módulo PDV</th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th>
                               </tr>
@@ -270,6 +285,20 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
                                           <span className="px-2 py-1 rounded-md bg-blue-50 text-blue-700 text-xs font-semibold">
                                               {company.plan}
                                           </span>
+                                      </td>
+                                      <td className="px-6 py-4">
+                                          <button
+                                              onClick={() => handleTogglePos(company.id, company.pos_enabled, company.name)}
+                                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition border ${
+                                                  company.pos_enabled 
+                                                  ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' 
+                                                  : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'
+                                              }`}
+                                              title={company.pos_enabled ? 'Clique para desativar o PDV' : 'Clique para ativar o PDV'}
+                                          >
+                                              <span className={`w-2 h-2 rounded-full ${company.pos_enabled ? 'bg-red-600 animate-pulse' : 'bg-gray-400'}`}></span>
+                                              {company.pos_enabled ? 'PDV Ativo' : 'Desativado'}
+                                          </button>
                                       </td>
                                       <td className="px-6 py-4">
                                           {company.status === 'active' && (
@@ -501,6 +530,23 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ curren
                           className="w-full border border-gray-300 rounded-lg p-2.5"
                           value={companyForm.password} onChange={e => setCompanyForm({...companyForm, password: e.target.value})}
                       />
+                      
+                      <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-gray-50">
+                          <div>
+                              <span className="text-sm font-semibold text-gray-800 block">Habilitar Módulo PDV</span>
+                              <span className="text-xs text-gray-500">Ponto de Venda integrado (padrão desativado)</span>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                              <input 
+                                  type="checkbox" 
+                                  className="sr-only peer"
+                                  checked={companyForm.pos_enabled}
+                                  onChange={e => setCompanyForm({...companyForm, pos_enabled: e.target.checked})}
+                              />
+                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                          </label>
+                      </div>
+
                       <button type="submit" className="w-full bg-green-600 text-white py-2.5 rounded-lg font-medium hover:bg-green-700">
                           Confirmar Cadastro
                       </button>
